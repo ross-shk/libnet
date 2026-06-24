@@ -18,21 +18,24 @@ A socket library for PL/I with a C bridge, object-oriented wrappers, and PL/I co
 ```pli
  main: proc options(main);
  %include socket;
+   dcl request  char(2048) varying;
+   dcl response char(2048);
+   dcl bytes    size_t;
+   dcl sock     like socket_t;
 
-   dcl sock       like socket_t;
-   dcl response   char(4096);
-   dcl bytes      size_t;
-
-   on condition(socket_error) begin;
-     put skip list('Error, errno =', socket_errno(sock));
-     stop;
-   end;
-
+   request =
+       'GET / HTTP/1.1' || LINE_END ||
+       'Host: 127.0.0.1:' || '8080' || LINE_END ||
+       'Connection: close' || LINE_END || LINE_END;
+ 
    call new_connect(sock, '127.0.0.1', 8080);
-   bytes = socket_send(sock, 'Hello' || LINE_END, 0);
+   bytes = socket_send(sock, request, 0);
    bytes = socket_receive(sock, response, 0);
-   call close_socket(sock);
- end main;
+
+   put skip list('Response ', substr(response, 1, bytes));
+
+   call close_socket(sock); 
+ end;
 ```
 
 ## Build (32-bit ELF)
