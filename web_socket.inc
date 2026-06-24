@@ -45,10 +45,12 @@
  ) returns(socket_fd_t);  /* socket descriptor */
 
  dcl send entry (
-   socket_fd_t,      /* socket descriptor */
-   char(*) varying,  /* request */
-   flags_t           /* flags */
- ) returns(size_t);  /* num of bytes sent */
+   socket_fd_t,  /* socket descriptor */
+   pointer,      /* request */
+   size_t,       /* length */
+   flags_t       /* flags */
+ ) returns(size_t)  /* num of bytes sent */
+   options(linkage(system)) external('send');
 
  dcl receive entry (
    socket_fd_t,  /* socket descriptor */

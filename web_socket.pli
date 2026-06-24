@@ -97,34 +97,4 @@
    return(sock_fd);
  end connect;
 
-   dcl c_send entry (
-       socket_fd_t,  /* socket descriptor */
-       pointer,      /* request */
-       size_t,       /* length */
-       flags_t       /* flags */
-   ) returns(size_t)  /* num of bytes sent */
-     options(linkage(system)) external('send');
-
-  send: proc(sock_fd, request, flags) returns(size_t);
-    dcl sock_fd socket_fd_t;
-    dcl request char(*) varying;
-    dcl flags flags_t;
-    dcl total_sent size_t init(0);
-    dcl n size_t;
-    dcl len fixed bin(31);
-    dcl data char(length(request));
-
-    data = request;
-    len = length(request);
-
-    do while(total_sent < len);
-      n = c_send(sock_fd, addr(data) + total_sent,
-                 len - total_sent, flags);
-      if n <= 0 then
-        leave;
-      total_sent = total_sent + n;
-    end;
-    return(total_sent);
-  end send;
-
  end web_socket;

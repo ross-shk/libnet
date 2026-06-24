@@ -44,8 +44,18 @@ socket: package exports(new_connect, socket_send, socket_receive,
    dcl flags flags_t;
 
    dcl bytes_sent fixed bin(31) init(0);
+   dcl n size_t;
+   dcl slice char(length(request));
 
-   bytes_sent = send(sock.fd, request, flags);
+   slice = request;
+
+   do while(bytes_sent < length(request));
+     n = send(sock.fd, addr(slice) + bytes_sent,
+                 length(request) - bytes_sent, flags);
+     if n <= 0 then leave;
+     bytes_sent = bytes_sent + n;
+   end;
+
    if bytes_sent < 0 then
      do;
        signal condition(socket_error);
