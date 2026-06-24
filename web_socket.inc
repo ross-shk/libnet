@@ -25,19 +25,23 @@
 
  dcl accept entry (
    socket_fd_t  /* server socket descriptor */
- ) returns(socket_fd_t);  /* client socket descriptor */
+ ) returns(socket_fd_t)  /* client socket descriptor */
+   options(linkage(system)) external('default_accept');
 
- dcl socket entry () returns(socket_fd_t);
+ dcl socket entry () returns(socket_fd_t)
+     options(linkage(system)) external('default_socket');
 
  dcl listen entry (
     socket_fd_t,  /* socket descriptor */
     backlog_t     /* backlog */
- ) returns(fixed bin(31));  /* status */
+ ) returns(fixed bin(31))  /* status */
+   options(linkage(system)) external('listen');
 
  dcl bind entry (
    socket_fd_t,  /* socket descriptor */
    port_t        /* port */
- ) returns (fixed bin(31));  /* status */
+ ) returns (fixed bin(31))  /* status */
+   options(linkage(system)) external('bind_to_port');
 
  dcl connect entry (
    char(*) varying,  /* host */

@@ -20,64 +20,6 @@
 
  %include type_defs;
 
-   dcl c_shutdown entry (socket_fd_t, shut_how_t) 
-     returns (fixed bin(31))
-     options(linkage(system)) external('shutdown');
-
- shutdown: proc(socket_fd, how) returns(fixed bin(31));
-   dcl socket_fd socket_fd_t;
-   dcl how shut_how_t;
-   
-   return(c_shutdown(socket_fd, how));
- end shutdown;
-
-   dcl c_accept entry (socket_fd_t) returns (socket_fd_t)
-     options(linkage(system)) external('default_accept');
-
- accept: proc(socket_fd) returns(socket_fd_t);
-   dcl socket_fd socket_fd_t;
-   return(c_accept(socket_fd));
- end accept;
-
-   dcl c_socket entry () returns (socket_fd_t)
-     options(linkage(system)) external('default_socket');
-
- socket: proc() returns(socket_fd_t);
-   return(c_socket());
- end socket;
-
-   dcl c_listen entry (
-     socket_fd_t,
-     backlog_t
-   ) returns (fixed bin(31))
-     options(linkage(system)) external('listen');
-
- listen: proc(socket_fd, backlog) returns(fixed bin(31));
-   dcl socket_fd socket_fd_t;
-   dcl backlog backlog_t;
-   dcl status fixed bin(31);
-
-   status = c_listen(socket_fd, backlog);
-
-   return(status);
- end listen;
-
-   dcl c_bind entry (
-     socket_fd_t,
-     port_t
-   ) returns (fixed bin(31)) 
-     options(linkage(system)) external('bind_to_port');
-
- bind: proc(sock_fd, port) returns (fixed bin(31));
-   dcl sock_fd socket_fd_t;
-   dcl port port_t;
-   dcl status fixed bin(31);
-
-   status = c_bind(sock_fd, port);
-
-   return(status);
- end bind;
-
    dcl c_connect entry (
      pointer,    /* host */
      port_t      /* port */
