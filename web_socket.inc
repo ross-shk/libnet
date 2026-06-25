@@ -17,6 +17,13 @@
 
  %include type_defs;
 
+ dcl socket entry (
+   fixed bin(31),  /* family */
+   fixed bin(31),  /* type */
+   fixed bin(31)   /* flag */
+ ) returns(fixed bin(31))  /* socket descriptor */
+   options(linkage(system)) external('socket');
+
  dcl get_errno entry () returns(fixed bin(31))
     options(linkage(system)) external('get_errno_value');
 
