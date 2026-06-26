@@ -113,6 +113,9 @@
      signal condition(socket_error);
      return(err_code);
    end;
+
+   sock._connected = '0'b;
+   
    return(err_code);
  end close_socket;
 
