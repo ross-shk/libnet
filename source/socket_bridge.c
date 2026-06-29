@@ -21,6 +21,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <netinet/in.h>
+#include <netdb.h>
 
 int default_accept(int server_fd) {
   struct sockaddr_in client_addr;
@@ -47,7 +48,49 @@ int bind_to_port(int socket_fd, int port, int af, int inaddr) {
   return bind(socket_fd, (struct sockaddr *)&addr, sizeof(addr));
 }
 
-int get_errno_value(void) {
+int resolve_hostname(char *hostname, int family,
+  char *out_ip, int out_len) {
+  struct addrinfo hints = {0};
+  struct addrinfo *result;
+  int ret;
+
+  hints.ai_family = family;
+  hints.ai_socktype = SOCK_STREAM;
+
+  ret = getaddrinfo(hostname, NULL, &hints, &result);
+  if (ret != 0) {
+    switch (ret) {
+      case EAI_AGAIN:    errno = EAGAIN; break;
+      case EAI_BADFLAGS: errno = EINVAL; break;
+      case EAI_FAIL:     errno = EHOSTUNREACH; break;
+      case EAI_FAMILY:   errno = EAFNOSUPPORT; break;
+      case EAI_MEMORY:   errno = ENOMEM; break;
+      case EAI_NONAME:   errno = EHOSTUNREACH; break;
+      case EAI_SERVICE:  errno = EINVAL; break;
+      case EAI_SOCKTYPE: errno = EINVAL; break;
+      case EAI_SYSTEM:   break;
+      default:           errno = EINVAL; break;
+    }
+    return -1;
+  }
+
+  if (result->ai_family == AF_INET) {
+    struct sockaddr_in *a = (struct sockaddr_in *)result->ai_addr;
+    inet_ntop(AF_INET, &a->sin_addr, out_ip, out_len);
+  } else if (result->ai_family == AF_INET6) {
+    struct sockaddr_in6 *a6 = (struct sockaddr_in6 *)result->ai_addr;
+    inet_ntop(AF_INET6, &a6->sin6_addr, out_ip, out_len);
+  } else {
+    freeaddrinfo(result);
+    errno = EAFNOSUPPORT;
+    return -1;
+  }
+
+  freeaddrinfo(result);
+  return 0;
+}
+
+int get_errno(void) {
   return errno;
 }
 

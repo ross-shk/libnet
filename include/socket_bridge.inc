@@ -24,8 +24,16 @@
  ) returns(fixed bin(31))  /* socket descriptor */
    options(linkage(system)) external('socket');
 
+ dcl resolve_hostname entry (
+   pointer,        /* hostname (null-terminated) */
+   fixed bin(31),  /* address family */
+   pointer,        /* output IP string buffer */
+   fixed bin(31)   /* output buffer length */
+ ) returns(fixed bin(31))  /* 0 on success, -1 on error */
+   options(linkage(system)) external('resolve_hostname');
+
  dcl get_errno entry () returns(fixed bin(31))
-    options(linkage(system)) external('get_errno_value');
+    options(linkage(system)) external('get_errno');
 
  dcl shutdown entry (
    socket_fd_t,   /* socket descriptor */
@@ -90,7 +98,7 @@
  ) returns(size_t)  /* num of bytes written */
    options(linkage(system)) external('write');
 
-  dcl close entry (
-    socket_fd_t  /* socket descriptor */
-  ) returns(fixed bin(31))  /* error code */
-    options(linkage(system)) external('close');
+ dcl close entry (
+   socket_fd_t  /* socket descriptor */
+ ) returns(fixed bin(31))  /* error code */
+   options(linkage(system)) external('close');
