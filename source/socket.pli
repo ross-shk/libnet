@@ -160,15 +160,15 @@
    dcl sock like socket_t;
 
    dcl err_code fixed bin(31) init(0);
-
-   err_code = close(sock._fd);
-   if err_code < 0 then do;
-     signal condition(socket_error) set oncode(get_errno());
-     return(err_code);
-   end;
-
-   sock._connected = '0'b;
    
+   if sock._fd > 0 then do;
+     err_code = close(sock._fd);
+     if err_code < 0 then do;
+       signal condition(socket_error) set oncode(get_errno());
+       return(err_code);
+     end;
+     sock._connected = '0'b;
+   end;
    return(err_code);
  end close_socket;
 
