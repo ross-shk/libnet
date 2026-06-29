@@ -45,8 +45,10 @@
    options(linkage(system)) external('listen');
 
  dcl bind entry (
-   socket_fd_t,  /* socket descriptor */
-   port_t        /* port */
+   socket_fd_t,    /* socket descriptor */
+   port_t,         /* port */
+   fixed bin(31),  /* family */
+   fixed bin(31)   /* in-address */
  ) returns (fixed bin(31))  /* status */
    options(linkage(system)) external('bind_to_port');
  

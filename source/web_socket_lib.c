@@ -36,13 +36,13 @@ int default_accept(int server_fd) {
   return client_fd;
 }
 
-int bind_to_port(int socket_fd, int port) {
+int bind_to_port(int socket_fd, int port, int af, int inaddr) {
   struct sockaddr_in addr;
 
   memset(&addr, 0, sizeof(addr));
-  addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = INADDR_ANY;   // default: all interfaces
-  addr.sin_port = htons(port);         // user-specified port
+  addr.sin_family = af;
+  addr.sin_addr.s_addr = inaddr;   
+  addr.sin_port = htons(port);         
 
   return bind(socket_fd, (struct sockaddr *)&addr, sizeof(addr));
 }
