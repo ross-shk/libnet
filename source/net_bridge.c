@@ -55,7 +55,6 @@ int resolve_hostname(char *hostname, int family,
   int ret;
 
   hints.ai_family = family;
-  hints.ai_socktype = SOCK_STREAM;
 
   ret = getaddrinfo(hostname, NULL, &hints, &result);
   if (ret != 0)
