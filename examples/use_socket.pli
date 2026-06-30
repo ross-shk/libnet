@@ -34,7 +34,7 @@
    put skip list("REQUEST: " || LINE_END, trim(char(request)));
    
    call net_new(conn, AF.INET, TYPE.STREAM, 0);
-   call net_connect(conn, host, port);
+   call net_dial(conn, host, port);
    put skip list("       CONNECTED...");
 
    bytes_sent = net_write(conn, request);

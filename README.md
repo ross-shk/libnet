@@ -8,7 +8,7 @@ A socket library for PL/I with a C bridge, object-oriented wrappers, and PL/I co
 |------|---------|
 | `type_defs.inc` | Named types (`conn_t`, `port_t`, `buffer_t`, etc.) and the `net_t` structure |
 | `net_bridge.inc` | C function external declarations (`socket`, `bind`, `listen`, ...) |
-| `net.pli` / `.inc` | Object-oriented client socket methods (`net_connect`, `net_send`, `net_receive`, `net_close`, `net_shutdown`, `socket_errno`) |
+| `net.pli` / `.inc` | Object-oriented client socket methods (`net_dial`, `net_send`, `net_receive`, `net_close`, `net_shutdown`, `socket_errno`) |
 | `server_net.pli` / `.inc` | Server socket methods (`create_server`, `server_accept`, `server_error`) |
 | `net_errors.inc` | `net_error` condition and `get_errno` entry |
 | `net_bridge.c` | C bridge: `default_accept`, `bind_to_port`, `connect_to_host`, `get_errno_value`, `resolve_hostname` |
@@ -31,7 +31,7 @@ A socket library for PL/I with a C bridge, object-oriented wrappers, and PL/I co
        'Connection: close' || LINE_END || LINE_END;
    
    call net_new(conn, AF.INET, TYPE.STREAM, 0); 
-   call net_connect(conn, '127.0.0.1', 8080);
+   call net_dial(conn, '127.0.0.1', 8080);
    bytes = net_send(conn, request, 0);
    bytes = net_receive(conn, response, 0);
 

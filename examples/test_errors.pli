@@ -38,7 +38,7 @@
    put skip list('Attempting connection to', trim(host), ':', port);
 
    call net_new(conn, AF.INET, TYPE.STREAM, 0); 
-   call net_connect(conn, host, port);
+   call net_dial(conn, host, port);
    put skip list('Connected');
 
    bytes = net_send(conn, request, 0);

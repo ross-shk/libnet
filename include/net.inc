@@ -23,7 +23,7 @@
    fixed bin(31), 
    fixed bin(31));
  
- dcl net_connect entry (
+ dcl net_dial entry (
    like net_t,
    char(*) varying,
    port_t

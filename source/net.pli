@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
- net: package exports(net_connect, net_send, net_receive,
+ net: package exports(net_dial, net_send, net_receive,
    net_read, net_write, net_close, net_shutdown, 
    net_new, net_resolve);
 
@@ -35,7 +35,7 @@
    sock._flag = flag;
  end net_new;
 
- net_connect: proc(conn, host, port);
+ net_dial: proc(conn, host, port);
    dcl conn like net_t;
    dcl host char(*) varying;
    dcl port port_t;
@@ -65,7 +65,7 @@
       return(length(host) ^=
         length(translate(host, '', letters)));
     end is_hostname;
- end net_connect;
+ end net_dial;
 
  net_send: proc(conn, request, flags) returns(size_t);
    dcl conn like net_t;
