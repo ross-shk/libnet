@@ -1,5 +1,5 @@
  main: proc options(main);
- %include server_net;
+ %include net_server;
 
    dcl server    like net_t;
    dcl client    like net_t;

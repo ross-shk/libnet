@@ -38,7 +38,7 @@ gcc -m32 -c ../source/net_bridge.c -o net_bridge.o
 
 echo "=== Compiling library packages ==="
 plic -C -dELF -ew -O ../source/net.pli      $INCDIR -o net.o
-# plic -C -dELF -ew -O ../source/server_net.pli $INCDIR -o server_net.o
+# plic -C -dELF -ew -O ../source/net_server.pli $INCDIR -o net_server.o
 
 echo "=== Compiling $SOURCE ==="
 plic -C -dELF -ew -O "$SOURCE" $INCDIR -o "${OUTPUT}.o"
