@@ -14,43 +14,43 @@
  * limitations under the License.
  */
 
- socket: package exports(socket_connect, socket_send, socket_receive,
-   socket_read, socket_write, close_socket, shutdown_socket, 
-   new_socket, socket_resolve);
+ net: package exports(net_connect, net_send, net_receive,
+   net_read, net_write, net_close, net_shutdown, 
+   net_new, net_resolve);
 
- %include socket_bridge;
- %include socket_errors;
+ %include net_bridge;
+ %include net_errors;
 
- new_socket: proc(sock, family, type, flag);
-   dcl sock like socket_t;
+ net_new: proc(sock, family, type, flag);
+   dcl sock like net_t;
    dcl (family, type, flag) fixed bin(31);
 
    sock._fd = socket(family, type, flag);
    if sock._fd < 0 then do;
-     signal condition(socket_error) set oncode(get_errno());
+     signal condition(net_error) set oncode(get_errno());
      return;
    end;
    sock._family = family;
    sock._type = type;
    sock._flag = flag;
- end new_socket;
+ end net_new;
 
- socket_connect: proc(sock, host, port);
-   dcl sock like socket_t;
+ net_connect: proc(sock, host, port);
+   dcl sock like net_t;
    dcl host char(*) varying;
    dcl port port_t;
 
-   if is_hostname() then call socket_resolve(sock, host);
+    if is_hostname(host) then call net_resolve(sock, host);
 
-   begin;
-     dcl status fixed bin(31);
-     dcl c_host char(256);
+    begin;
+      dcl status fixed bin(31);
+      dcl c_host char(256);
 
-     c_host = trim(substr(host, 1, length(host))) || '00'x;
+      c_host = trim(substr(host, 1, length(host))) || '00'x;
 
      status = connect(addr(c_host), port, sock._fd, sock._family);
      if status < 0 then do;
-       signal condition(socket_error) set oncode(get_errno());
+       signal condition(net_error) set oncode(get_errno());
        return;
      end;
    end;
@@ -58,15 +58,17 @@
    sock._port = port;
    sock._connected = '1'b;
 
-   is_hostname: proc() returns(bit(1));
-     dcl letters char(52) init(
-       'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz');
-     return(index(translate(host, '', letters), ''));
-   end is_hostname;
- end socket_connect;
+    is_hostname: proc(host) returns(bit(1));
+      dcl host char(*) varying;
+      dcl letters char(52) init(
+        'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz');
+      return(length(host) ^=
+        length(translate(host, '', letters)));
+    end is_hostname;
+ end net_connect;
 
- socket_send: proc(sock, request, flags) returns(size_t);
-   dcl sock like socket_t;
+ net_send: proc(sock, request, flags) returns(size_t);
+   dcl sock like net_t;
    dcl request char(*) varying;
    dcl flags flags_t;
 
@@ -87,14 +89,14 @@
    end;
 
    if bytes_sent < 0 then do;
-     signal condition(socket_error) set oncode(get_errno());
+     signal condition(net_error) set oncode(get_errno());
      return(bytes_sent);
    end;
    return(bytes_sent);
- end socket_send;
+ end net_send;
 
- socket_receive: proc(sock, response, flags) returns(size_t);
-   dcl sock like socket_t;
+ net_receive: proc(sock, response, flags) returns(size_t);
+   dcl sock like net_t;
    dcl response char(*);   
    dcl flags flags_t;
 
@@ -103,16 +105,16 @@
    bytes_received = receive(sock._fd, addr(response), 
       length(response), flags);
    if bytes_received < 0 then do;
-     signal condition(socket_error) set oncode(get_errno());
+     signal condition(net_error) set oncode(get_errno());
      return(bytes_received);
    end;
    if bytes_received > 0 then 
       response = substr(response, 1, bytes_received);
    return(bytes_received);
- end socket_receive; 
+ end net_receive; 
 
- socket_write: proc(sock, buffer) returns(size_t);
-   dcl sock like socket_t;
+ net_write: proc(sock, buffer) returns(size_t);
+   dcl sock like net_t;
    dcl buffer char(*) varying;
 
    dcl bytes_written fixed bin(31) init(0);
@@ -132,59 +134,59 @@
     end;
 
     if bytes_written < 0 then do;
-      signal condition(socket_error) set oncode(get_errno());
+      signal condition(net_error) set oncode(get_errno());
       return(bytes_written);
     end;
    return(bytes_written);
- end socket_write;
+ end net_write;
 
- socket_read: proc(sock, buffer) returns(size_t);
-   dcl sock like socket_t;
+ net_read: proc(sock, buffer) returns(size_t);
+   dcl sock like net_t;
    dcl buffer char(*);
    dcl bytes_read size_t;
 
    bytes_read = read(sock._fd, addr(buffer), length(buffer));
 
    if bytes_read < 0 then do;
-     signal condition(socket_error) set oncode(get_errno());
+     signal condition(net_error) set oncode(get_errno());
      return(bytes_read);
    end;
    if bytes_read > 0 then 
       buffer = substr(buffer, 1, bytes_read);
    return(bytes_read);
- end socket_read;
+ end net_read;
 
- close_socket: proc(sock) returns(fixed bin(31));
-   dcl sock like socket_t;
+ net_close: proc(sock) returns(fixed bin(31));
+   dcl sock like net_t;
 
    dcl err_code fixed bin(31) init(0);
    
    if sock._fd > 0 then do;
      err_code = close(sock._fd);
      if err_code < 0 then do;
-       signal condition(socket_error) set oncode(get_errno());
+       signal condition(net_error) set oncode(get_errno());
        return(err_code);
      end;
      sock._connected = '0'b;
    end;
    return(err_code);
- end close_socket;
+ end net_close;
 
- shutdown_socket: proc(sock, how) returns(fixed bin(31));
-   dcl sock like socket_t;
+ net_shutdown: proc(sock, how) returns(fixed bin(31));
+   dcl sock like net_t;
    dcl how shut_how_t;
    dcl err fixed bin(31);
 
    err = shutdown(sock._fd, how);
    if err < 0 then do;
-     signal condition(socket_error) set oncode(get_errno());
+     signal condition(net_error) set oncode(get_errno());
      return(err);
    end;
    return(err);
- end shutdown_socket;
+ end net_shutdown;
 
- socket_resolve: proc(sock, hostname);
-   dcl sock like socket_t;
+ net_resolve: proc(sock, hostname);
+   dcl sock like net_t;
    dcl hostname char(*) varying;
 
    dcl ip_buf char(64) init((64)'00'x); 
@@ -199,7 +201,7 @@
        addr(ip_buf), length(ip_buf));
 
      if rc < 0 then do;
-       signal condition(socket_error) set oncode(get_errno());
+       signal condition(net_error) set oncode(get_errno());
        return;
      end;
    end;
@@ -208,6 +210,6 @@
    if null_pos = 0 then null_pos = length(ip_buf) + 1;
 
    sock._host = substr(ip_buf, 1, null_pos - 1);
- end socket_resolve;
+ end net_resolve;
 
- end socket;
+ end net;

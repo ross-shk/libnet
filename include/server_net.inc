@@ -15,15 +15,15 @@
  * limitations under the License.
  */
 
- %include socket;
+ %include net;
 
  dcl create_server entry (
-   like socket_t,
+   like net_t,
    port_t,
    backlog_t
  );
 
  dcl server_accept entry (
-   like socket_t,
-   like socket_t
+   like net_t,
+   like net_t
  );

@@ -16,7 +16,7 @@
 
  %process options(extended_replace);
 
- %replace socket_fd_t by "fixed bin(31)";  /* socket descriptor */
+ %replace net_fd_t by "fixed bin(31)";  /* socket descriptor */
  %replace size_t      by "fixed bin(31)";
  %replace port_t      by "fixed bin(31)";
  %replace backlog_t   by "fixed bin(31)";
@@ -41,8 +41,8 @@
        2 ANY       fixed bin(31) init(0),
        2 BROADCAST fixed bin(31) init(-1);
 
- dcl 1 socket_t aligned based,
-       2 _fd        socket_fd_t,
+ dcl 1 net_t aligned based,
+       2 _fd        net_fd_t,
        2 _host      char(256) init(''),
        2 _port      port_t init(0),
        2 _connected bit(1) init('0'b),

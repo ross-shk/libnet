@@ -17,51 +17,51 @@
 
  %include type_defs;
 
- dcl new_socket entry (
-   like socket_t, 
+ dcl net_new entry (
+   like net_t, 
    fixed bin(31), 
    fixed bin(31), 
    fixed bin(31));
  
- dcl socket_connect entry (
-   like socket_t,
+ dcl net_connect entry (
+   like net_t,
    char(*) varying,
    port_t
  );
 
- dcl socket_send entry (
-   like socket_t,
+ dcl net_send entry (
+   like net_t,
    char(*) varying,
    flags_t
  ) returns(size_t);
 
- dcl socket_write entry (
-   like socket_t,
+ dcl net_write entry (
+   like net_t,
    char(*) varying
  ) returns(size_t);
  
- dcl socket_receive entry (
-   like socket_t,
+ dcl net_receive entry (
+   like net_t,
    char(*),  
    flags_t
  ) returns(size_t);
 
- dcl socket_read entry (
-   like socket_t,
+ dcl net_read entry (
+   like net_t,
    char(*)
  ) returns(size_t);
 
- dcl close_socket entry (
-   like socket_t
+ dcl net_close entry (
+   like net_t
  ) returns(fixed bin(31));
 
- dcl shutdown_socket entry (
-   like socket_t,
+ dcl net_shutdown entry (
+   like net_t,
    shut_how_t  /* 0=read, 1=write, 2=both */
  ) returns(fixed bin(31));
 
- dcl socket_resolve entry (
-   like socket_t,
+ dcl net_resolve entry (
+   like net_t,
    char(*) varying
  );
   

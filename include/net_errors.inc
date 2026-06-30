@@ -15,4 +15,4 @@
  * limitations under the License.
  */
 
- dcl socket_error condition;
+ dcl net_error condition;

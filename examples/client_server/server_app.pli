@@ -1,8 +1,8 @@
  main: proc options(main);
- %include server_socket;
+ %include server_net;
 
-   dcl server    like socket_t;
-   dcl client    like socket_t;
+   dcl server    like net_t;
+   dcl client    like net_t;
    dcl port      port_t init(8090);
    dcl backlog   backlog_t init(5);
    dcl buffer    char(4096);
@@ -10,18 +10,18 @@
    dcl bytes     size_t;
 
    on attention begin;
-     call close_socket(server);
-     call close_socket(client);
+     call net_close(server);
+     call net_close(client);
      goto done;
    end;
 
-   on condition(socket_error) begin;
+   on condition(net_error) begin;
      put skip list('Socket error, code =', oncode());
      goto done;
    end;
    
     /* create socket */
-    call new_socket(server, AF.INET, TYPE.STREAM, 0);
+    call net_new(server, AF.INET, TYPE.STREAM, 0);
 
     /* bind and listen */
     call create_server(server, port, backlog);
@@ -34,9 +34,9 @@
    put skip list('Client connected');
 
    /* read what the client sent */
-   bytes = socket_read(client, buffer);
+   bytes = net_read(client, buffer);
    if bytes < 0 then do;
-     put skip list('socket_read failed');
+     put skip list('net_read failed');
      stop;
    end;
 
@@ -45,17 +45,17 @@
      put skip list('Received:', message);
 
      /* echo it back */
-     bytes = socket_write(client, message);
+     bytes = net_write(client, message);
      if bytes < 0 then do;
-       put skip list('socket_write failed');
+       put skip list('net_write failed');
        stop;
      end;
 
      put skip list('Echoed back');
    end;
 
-   call close_socket(client);
-   call close_socket(server);
+   call net_close(client);
+   call net_close(server);
 
  done:
    put skip list('Server shut down');

@@ -16,25 +16,25 @@
  */
 
  main: procedure options(main);
- %include socket;
+ %include net;
 
    declare
      request  char(2048) varying,
      response char(2048),
      bytes    size_t,
-     sock     like socket_t;
+     sock     like net_t;
 
    request =
        'GET / HTTP/1.1' || LINE_END ||
        'Host: 127.0.0.1:' || '8080' || LINE_END ||
        'Connection: close' || LINE_END || LINE_END;
    
-   call new_socket(sock, AF.INET, TYPE.STREAM, 0); 
-   call socket_connect(sock, '127.0.0.1', 8080);
-   bytes = socket_send(sock, request, 0);
-   bytes = socket_receive(sock, response, 0);
+   call net_new(sock, AF.INET, TYPE.STREAM, 0); 
+   call net_connect(sock, '127.0.0.1', 8080);
+   bytes = net_send(sock, request, 0);
+   bytes = net_receive(sock, response, 0);
 
    put skip list('Response ', substr(response, 1, bytes));
 
-   call close_socket(sock); 
+   call net_close(sock); 
  end;

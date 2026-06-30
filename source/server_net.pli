@@ -15,23 +15,23 @@
  * limitations under the License.
  */
 
- server_socket: package exports(create_server, server_accept);
+ net: package exports(create_server, server_accept);
 
- %include socket_bridge;
- %include socket_errors;
+ %include net_bridge;
+ %include net_errors;
 
  create_server: proc(sock, port, backlog);
-   dcl sock    like socket_t;
+   dcl sock    like net_t;
    dcl port    port_t;
    dcl backlog backlog_t;
 
    if bind(sock._fd, port, sock._family, INADDR.ANY) < 0 then do;
-     signal condition(socket_error) set oncode(get_errno());
+     signal condition(net_error) set oncode(get_errno());
      return;
    end;
 
    if listen(sock._fd, backlog) < 0 then do;
-     signal condition(socket_error) set oncode(get_errno());
+     signal condition(net_error) set oncode(get_errno());
      return;
    end;
 
@@ -40,13 +40,13 @@
  end create_server;
 
  server_accept: proc(server, client) returns(fixed bin(31));
-   dcl server like socket_t;
-   dcl client like socket_t;
-   dcl client_fd socket_fd_t;
+   dcl server like net_t;
+   dcl client like net_t;
+   dcl client_fd net_fd_t;
 
    client_fd = accept(server._fd);
    if client_fd < 0 then do;
-     signal condition(socket_error) set oncode(get_errno());
+     signal condition(net_error) set oncode(get_errno());
      return;
    end;
 
@@ -54,4 +54,4 @@
     client._connected = '1'b;
  end server_accept;
 
- end server_socket;
+ end net;

@@ -1,17 +1,17 @@
 
  main: proc options(main);
- %include socket;
+ %include net;
 
-   dcl sock like socket_t;
+   dcl sock like net_t;
    dcl hostname char(256) varying init('www.example.com');
 
-   on condition(socket_error) begin;
+   on condition(net_error) begin;
      put skip list('Resolution failed, errno =', oncode());
      stop;
    end;
 
-   call new_socket(sock, AF.INET, TYPE.STREAM, 0);
-   call socket_resolve(sock, hostname);
+   call net_new(sock, AF.INET, TYPE.STREAM, 0);
+   call net_resolve(sock, hostname);
 
    put skip list('Resolved', hostname, 'to', trim(sock._host));
 

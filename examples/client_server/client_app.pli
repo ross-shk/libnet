@@ -1,8 +1,8 @@
   main: proc options(main);
 
- %include socket;
+ %include net;
 
-   dcl sock     like socket_t;
+   dcl sock     like net_t;
    dcl host     char(256);
    dcl port     fixed bin(31) init(8090);
    dcl request  char(256) varying;
@@ -10,7 +10,7 @@
    dcl bytes    size_t;
 
    on attention begin;
-     call close_socket(sock);
+     call net_close(sock);
      put skip list('Client shut down');
      stop;
    end;
@@ -20,19 +20,19 @@
 
    put skip list('Connecting to', trim(host), port);
 
-   call new_socket(sock, AF.INET, TYPE.STREAM, 0);
-   call socket_connect(sock, host, port);
+   call net_new(sock, AF.INET, TYPE.STREAM, 0);
+   call net_connect(sock, host, port);
    put skip list('Connected');
 
-   bytes = socket_write(sock, request);
+   bytes = net_write(sock, request);
    put skip list('Sent', bytes, 'bytes');
 
-   bytes = socket_read(sock, response);
+   bytes = net_read(sock, response);
    if bytes > 0 then
      put skip list('Received:', substr(response, 1, bytes));
    else
      put skip list('No response received');
 
-   call close_socket(sock);
+   call net_close(sock);
    put skip list('Client done');
  end main;
