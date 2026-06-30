@@ -1,6 +1,11 @@
 #!/bin/bash
 
 set -e
+
+# Path to Iron Spring PL/I alternate storage management modules.
+# These replace PL/I's internal heap with C's malloc/free.
+ALT_DIR="${ALT_DIR:-/usr/lib/pli-1.4.1/lib/alt}"
+
 INC="-i../../include"
 
 echo "=== Building C bridge ==="
@@ -15,7 +20,7 @@ plic -C -dELF -ew -O server_app.pli  $INC -o server_app.o
 plic -C -dELF -ew -O client_app.pli  $INC -o client_app.o
 
 LIBS="-lprf"
-LD_FLAGS="-m32 -no-pie -z muldefs -Wl,-M -Wl,--oformat=elf32-i386 -static-libgcc -nostartfiles -e main"
+LD_FLAGS="-m32 -no-pie -z muldefs -Wl,-M -Wl,--oformat=elf32-i386 -static-libgcc"
 OBJS="socket_bridge.o socket.o server_socket.o"
 
 echo "=== Linking server_app ==="

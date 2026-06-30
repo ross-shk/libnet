@@ -15,10 +15,6 @@
 
 set -e
 
-# Path to Iron Spring PL/I alternate storage management modules.
-# These replace PL/I's internal heap with C's malloc/free.
-ALT_DIR="${ALT_DIR:-/usr/lib/pli-1.4.1/lib/alt}"
-
 if [ $# -lt 1 ]; then
   echo "Usage: $0 <source.pli> [output_name]"
   echo ""
@@ -49,9 +45,8 @@ plic -C -dELF -ew -O "$SOURCE" $INCDIR -o "${OUTPUT}.o"
 
 echo "=== Linking $OUTPUT ==="
 gcc -m32 -no-pie -z muldefs -Wl,-M -Wl,--oformat=elf32-i386 \
-  -static-libgcc \
+  -static-libgcc -nostartfiles -e main \
   -o "$OUTPUT" "${OUTPUT}.o" socket_bridge.o socket.o \
-  ${ALT_DIR}/fhs.o ${ALT_DIR}/ghs.o \
   -lprf > "${OUTPUT}.map"
 
 echo "=== Build complete: $OUTPUT ==="
