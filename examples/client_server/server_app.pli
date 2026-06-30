@@ -24,7 +24,7 @@
     call net_new(server, AF.INET, TYPE.STREAM, 0);
 
     /* bind and listen */
-    call create_server(server, port, backlog);
+    call net_listen(server, port, backlog);
 
    put skip list('Server listening on port', port);
 

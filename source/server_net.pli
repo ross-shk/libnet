@@ -15,12 +15,12 @@
  * limitations under the License.
  */
 
- net: package exports(create_server, server_accept);
+ net: package exports(net_listen, server_accept);
 
  %include net_bridge;
  %include net_errors;
 
- create_server: proc(conn, port, backlog);
+ net_listen: proc(conn, port, backlog);
    dcl conn    like net_t;
    dcl port    port_t;
    dcl backlog backlog_t;
@@ -37,7 +37,7 @@
 
    sock._port = port;
    sock._connected = '1'b;
- end create_server;
+ end net_listen;
 
  server_accept: proc(server, client) returns(fixed bin(31));
    dcl server like net_t;

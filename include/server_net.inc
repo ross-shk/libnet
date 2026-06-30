@@ -17,7 +17,7 @@
 
  %include net;
 
- dcl create_server entry (
+ dcl net_listen entry (
    like conn_t,
    port_t,
    backlog_t
