@@ -35,6 +35,14 @@
    sock._flag = flag;
  end netnew;
 
+ netconnect: proc(conn, ip, port);
+   dcl conn like conncb;
+   dcl ip fixed bin(31);
+   dcl port port_t;
+
+
+ end netconnect;
+
  netdial: proc(conn, host, port);
    dcl conn like conncb;
    dcl host char(*) varying;
