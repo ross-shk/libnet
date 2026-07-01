@@ -1,6 +1,6 @@
 # PL/I Networking Library
 
-A socket library for PL/I with a C bridge, object-oriented wrappers, and PL/I condition-based error handling.
+A basic networking library for PL/I
 
 ## Files
 
@@ -44,7 +44,7 @@ A socket library for PL/I with a C bridge, object-oriented wrappers, and PL/I co
 
 ## Build & Install
 
-Requires Iron Spring PL/I (`plic`), `gcc` with `-m32`, and `libprf` (32-bit).
+Requires Iron Spring PL/I (`plic`) and `gcc` (32-bit).
 
 ```sh
 make
@@ -58,7 +58,7 @@ After `make install`, compile and link against the installed library:
 ```sh
 cd examples
 
-plic -C -dELF -ew -O readall_test.pli    \
+plic -C -dELF -ew readall_test.pli    \
   $(pkg-config --cflags net)              \   # -i/usr/local/include
   -o readall_test.o
 
