@@ -1,9 +1,9 @@
 PLIC      ?= plic
 CC        ?= gcc
 AR        ?= ar
-PLIFLAGS  ?= -C -dELF -ew -O
+PLIFLAGS  ?= -C -dELF -O
 CFLAGS    ?= -m32
-LDFLAGS   ?= -m32 -no-pie -z muldefs -Wl,--oformat=elf32-i386
+LDFLAGS   ?= -m32 -no-pie -z muldefs
 LIBS      ?= -lprf
 ALT_DIR   ?= /usr/lib/pli-1.4.1/lib/alt
 PREFIX    ?= /usr/local
