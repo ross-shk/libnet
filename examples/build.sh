@@ -40,18 +40,13 @@ INCDIR="-i../include"
 echo "=== Building C bridge ==="
 gcc -m32 -c ../source/net_bridge.c -o net_bridge.o
 
-echo "=== Compiling library packages ==="
-plic -C -dELF -ew -O ../source/net.pli      $INCDIR -o net.o
-# plic -C -dELF -ew -O ../source/net_server.pli $INCDIR -o net_server.o
-
 echo "=== Compiling $SOURCE ==="
-plic -C -dELF -ew -O "$SOURCE" $INCDIR -o "${OUTPUT}.o"
+plic -C -dELF -ew "$SOURCE" $(pkg-config --cflags net) -o "${OUTPUT}.o"
 
 echo "=== Linking $OUTPUT ==="
-gcc -m32 -no-pie -z muldefs -Wl,-M -Wl,--oformat=elf32-i386 \
-  -static-libgcc \
-  -o "$OUTPUT" "${OUTPUT}.o" net_bridge.o net.o \
-  ${ALT_DIR}/fhs.o ${ALT_DIR}/ghs.o \
-  -lprf > "${OUTPUT}.map"
+gcc -m32 -no-pie -z muldefs   \
+  -Wl,--oformat=elf32-i386    \
+  -o "$OUTPUT" "${OUTPUT}.o"  \
+  $(pkg-config --libs net)
 
 echo "=== Build complete: $OUTPUT ==="
