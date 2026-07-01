@@ -29,10 +29,10 @@
        'Host: 127.0.0.1:' || '8080' || LINE_END ||
        'Connection: close' || LINE_END || LINE_END;
    
-   call netnew(conn, AF.INET, TYPE.STREAM, 0); 
-   call netconnect(conn, '127.0.0.1', 8080);
-   bytes = netsend(conn, request, 0);
-   bytes = netreceive(conn, response, 0);
+   call netdial(conn, '127.0.0.1:8080', AF.INET);
+   
+   call netwriteall(conn, request);
+   bytes = netreadall(conn, response);
 
    put skip list('Response ', substr(response, 1, bytes));
 

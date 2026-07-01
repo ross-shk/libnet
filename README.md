@@ -18,7 +18,7 @@ A socket library for PL/I with a C bridge, object-oriented wrappers, and PL/I co
 ```pli
  main: procedure options(main);
  %include net;
- 
+
    declare
      request  char(1024) varying,
      response char(1024),
@@ -30,14 +30,14 @@ A socket library for PL/I with a C bridge, object-oriented wrappers, and PL/I co
        'Host: 127.0.0.1:' || '8080' || LINE_END ||
        'Connection: close' || LINE_END || LINE_END;
    
-   call net_new(conn, AF.INET, TYPE.STREAM, 0); 
-   call net_dial(conn, '127.0.0.1', 8080);
-   bytes = net_send(conn, request, 0);
-   bytes = net_receive(conn, response, 0);
+   call netdial(conn, '127.0.0.1:8080', AF.INET);
+   
+   call netwriteall(conn, request);
+   bytes = netreadall(conn, response);
 
    put skip list('Response ', substr(response, 1, bytes));
 
-   call net_close(conn); 
+   call netclose(conn); 
  end;
 ```
 
