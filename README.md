@@ -25,6 +25,7 @@ A socket library for PL/I with a C bridge, object-oriented wrappers, and PL/I co
      bytes    size_t,
      conn     like conncb;
 
+   /* assuming some server is running on localhost at 8080 */
    request =
        'GET / HTTP/1.1' || LINE_END ||
        'Host: 127.0.0.1:' || '8080' || LINE_END ||
