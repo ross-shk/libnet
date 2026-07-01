@@ -53,7 +53,12 @@
    flags_t
  ) returns(size_t);
 
- dcl netread entry (
+dcl netread entry (
+    like conncb,
+    char(*)
+  ) returns(size_t);
+
+ dcl netreadall entry (
    like conncb,
    char(*)
  ) returns(size_t);

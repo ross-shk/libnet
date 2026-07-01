@@ -15,7 +15,7 @@
  */
 
  net: package exports(netconnect, netdial, netsend, netreceive,
-   netread, netwrite, netclose, netshutdown, 
+   netread, netreadall, netwrite, netclose, netshutdown, 
    netnew, netresolve);
 
  %include net_bridge;
@@ -196,6 +196,34 @@
       buffer = substr(buffer, 1, bytes_read);
    return(bytes_read);
  end netread;
+
+ netreadall: proc(conn, buffer) returns(size_t);
+   dcl conn like conncb;
+   dcl buffer char(*);
+
+   dcl total_read size_t init(0);
+
+   begin;
+     dcl buf_ptr ptr;
+     buf_ptr = addr(buffer);
+     dcl n size_t;
+
+     do while(total_read < length(buffer));
+       n = read(conn._fd, buf_ptr + total_read,
+                length(buffer) - total_read);
+       if n < 0 then do;
+         signal condition(neterror) set oncode(get_errno());
+         return(n);
+       end;
+       if n = 0 then leave;
+       total_read = total_read + n;
+     end;
+   end;
+
+   if total_read > 0 then
+     buffer = substr(buffer, 1, total_read);
+   return(total_read);
+ end netreadall;
 
  netclose: proc(conn) returns(fixed bin(31));
    dcl conn like conncb;

@@ -1,0 +1,45 @@
+
+ /* Copyright 2026 Ross Shkurat
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+ * implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+ main: proc options(main);
+ %include net;
+
+   dcl host       char(256);
+   dcl request    char(2048) varying;
+   dcl (bytes_sent, bytes_received) size_t;
+   dcl response   char(2048);
+   dcl conn like conncb;
+
+   host = '127.0.0.1:8080';  /* or host = 'localhost'; */
+   request =
+       'GET / HTTP/1.1' || LINE_END ||
+       'Host: ' || trim(host) || LINE_END ||
+       'Connection: close' || LINE_END || LINE_END;
+   put skip list("REQUEST: " || LINE_END, trim(char(request)));
+   
+   call netdial(conn, host, AF.INET);
+   put skip list("       CONNECTED...");
+
+   bytes_sent = netwrite(conn, request);
+   put skip list(' >> bytes sent ', '' || trim(char(bytes_sent)));
+
+   bytes_received = netreadall(conn, response);
+   put skip list(' >> bytes received ', bytes_received);
+   put skip list(' >> response ', substr(response, 1, bytes_received));
+
+   call netclose(conn); 
+ end main;
