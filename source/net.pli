@@ -272,7 +272,7 @@
    null_pos = index(ip_buf, '00'x);
    if null_pos = 0 then null_pos = length(ip_buf) + 1;
    
-   conn._host = hostname;
+   conn._host = trim(substr(hostname, 1, length(hostname)));
    conn._ip = substr(ip_buf, 1, null_pos - 1);
  end netresolve;
 
