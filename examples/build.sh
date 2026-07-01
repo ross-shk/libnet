@@ -22,33 +22,24 @@ ALT_DIR="${ALT_DIR:-/usr/lib/pli-1.4.1/lib/alt}"
 if [ $# -lt 1 ]; then
   echo "Usage: $0 <source.pli> [output_name]"
   echo ""
-  echo "Builds a PL/I program that uses the socket library."
+  echo "Builds a PL/I program that uses the net library."
   echo "  source.pli    - PL/I source file (required)"
   echo "  output_name   - Executable name (default: basename of source without .pli)"
   echo ""
   echo "Examples:"
   echo "  $0 use_net.pli"
-  echo "  $0 client_server/server_app.pli server_app"
-  echo "  $0 client_server/client_app.pli client_app"
   exit 1
 fi
 
 SOURCE="$1"
 OUTPUT="${2:-$(basename "$SOURCE" .pli)}"
-INCDIR="-i../include"
-
-echo "=== Building C bridge ==="
-gcc -m32 -c ../source/net_bridge.c -o net_bridge.o
-
-echo "=== Compiling library packages ==="
-plic -C -dELF -ew -O ../source/net.pli $INCDIR -o net.o
 
 echo "=== Compiling $SOURCE ==="
-plic -C -dELF "$SOURCE" $INCDIR -o "${OUTPUT}.o"
+plic -C -dELF "$SOURCE" $(pkg-config --cflags net) -o "${OUTPUT}.o"
 
 echo "=== Linking $OUTPUT ==="
 gcc -m32 -no-pie -z muldefs \
   -o "$OUTPUT" "${OUTPUT}.o" \
-  ${ALT_DIR}/fhs.o ${ALT_DIR}/ghs.o -lnet -lprf
+  $(pkg-config --libs net) # ${ALT_DIR}/fhs.o ${ALT_DIR}/ghs.o -lnet -lprf
 
 echo "=== Build complete: $OUTPUT ==="
