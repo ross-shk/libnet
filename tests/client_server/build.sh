@@ -4,7 +4,7 @@ set -e
 
 # Path to Iron Spring PL/I alternate storage management modules.
 # These replace PL/I's internal heap with C's malloc/free.
-ALT_DIR="${ALT_DIR:-/usr/lib/pli-1.4.1/lib/alt}"
+ALT_DIR="${ALT_DIR:-/usr/lib/pli/alt}"
 
 INC="-i../../include"
 
