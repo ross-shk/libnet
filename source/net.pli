@@ -88,11 +88,11 @@
      end;
    end;
 
-   is_hostname: proc returns(bit(1));
-     dcl letters char(52) init(
-       'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz');
-     return(translate(host, '', letters) ^= host);
-   end;
+  is_hostname: proc returns(bit(1));
+      dcl letters char(52) init(
+        'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz');
+      return( verify(reverse(host), letters) > 1 );
+    end;
  end netdial;
 
  netsend: proc(conn, request, flags) returns(size_t);

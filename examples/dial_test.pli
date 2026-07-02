@@ -29,15 +29,15 @@
    allocate conncb set(conn);
    allocate response;
 
-   host = '127.0.0.1';  
-   port = 8080;
-   request =
-       'GET / HTTP/1.1' || LINE_END ||
-       'Host: ' || trim(host) || ":" || trim(port) || LINE_END ||
-       'Connection: close' || LINE_END || LINE_END;
-   put skip list("REQUEST: " || LINE_END, trim(char(request)));
-   
-   call netdial(c, '127.0.0.1:8080', AF.INET);
+    host = 'www.example.com';
+    port = 80;
+    request =
+        'GET / HTTP/1.1' || LINE_END ||
+        'Host: ' || trim(host) || ":" || trim(port) || LINE_END ||
+        'Connection: close' || LINE_END || LINE_END;
+    put skip list("REQUEST: " || LINE_END, trim(char(request)));
+    
+    call netdial(c, 'www.example.com:80', AF.INET);
    put skip list("       CONNECTED...");
 
    bytes_sent = netwrite(c, request);

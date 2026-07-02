@@ -43,5 +43,5 @@
    display('Response ' || substr(response, 1, bytes));
  
  done:
-   call netclose(conn); 
+   call netclose(conn);  
  end;
