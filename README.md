@@ -58,40 +58,22 @@ After `make install`, compile and link against the installed library:
 ```sh
 cd examples
 
-plic -C -dELF -ew readall_test.pli    \
-  $(pkg-config --cflags net)              \   # -i/usr/local/include
+plic -C -dELF readall_test.pli    \
+  $(pkg-config --cflags net)      \  
   -o readall_test.o
 
-gcc -m32 -no-pie -z muldefs               \   # 32-bit ELF target
-  -Wl,--oformat=elf32-i386                \
-  -o readall_test readall_test.o          \
-  $(pkg-config --libs net)                   # -L/usr/local/lib -lnet -lprf
+gcc -m32 -no-pie -z muldefs        \   
+  -o readall_test readall_test.o   \
+  $(pkg-config --libs net)                 
 ```
 
-`pkg-config` handles the library paths only. The remaining flags are toolchain requirements (Iron Spring PL/I's 32-bit ELF target) and don't change between projects.
+**NOTE:** `pkg-config` handles the library paths only. The remaining flags are toolchain requirements (Iron Spring PL/I's 32-bit ELF target) and don't change between projects.
 
-Or build directly in-tree with the existing script (no install needed):
+Or build with a script:
 
 ```sh
 cd examples
 ./build.sh readall_test.pli
-```
-
-## Layers
-
-```
- .──────────────────────────────────────────.
- |  Application (uses %include socket)      |
- |──────────────────────────────────────────|
- |  net.pli / net_server.pli          |
- |  (OO methods, error signaling)           |
- |──────────────────────────────────────────|
- |  net_bridge.inc                         |
- |  (C function declarations)               |
- |──────────────────────────────────────────|
- |  net_bridge.c                           |
- |  (POSIX sockets / errno capture)         |
- `──────────────────────────────────────────'
 ```
 
 ## License
