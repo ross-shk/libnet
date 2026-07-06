@@ -32,6 +32,8 @@ net_server.o: source/net_server.pli include/net_bridge.inc include/net_errors.in
 
 libnet.a: $(OBJS)
 	$(AR) rcs $@ $(OBJS)
+	rm -f *.o
+	rm -f *.lst
 
 $(DIST_INC): include/type_defs.inc include/net_bridge.inc include/net_errors.inc include/net_base.inc include/net_server.inc
 	mkdir -p dist
