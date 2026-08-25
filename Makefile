@@ -37,9 +37,10 @@ INC        = -i include
 OBJS       = net_bridge.o net.o net_server.o
 DIST_INC   = dist/net.inc
 DIST_PC    = dist/net.pc
-TEST_SRCS  = $(wildcard tests/*.pli)
+TEST_SRCS  = $(filter-out tests/server.pli,$(wildcard tests/*.pli))
+TEST_SERVER = tests/server
 
-.PHONY: all install uninstall clean distclean test test-client-server
+.PHONY: all install uninstall clean distclean test
 
 all: libnet.a $(DIST_INC) $(DIST_PC)
 
@@ -56,6 +57,11 @@ libnet.a: $(OBJS)
 	$(RUN) $(AR) rcs $@ $(OBJS)
 	rm -f *.o
 	rm -f *.lst
+
+$(TEST_SERVER): tests/server.pli libnet.a
+	$(RUN) plic $(PLIFLAGS) $< $(INC) -o $@.o; rc=$$?; \
+	if [ $$rc -ne 0 ] && [ $$rc -ne 4 ]; then exit $$rc; fi; \
+	$(RUN) gcc $(LDFLAGS) -o $@ $@.o libnet.a $(LIBS) $(ALT_DIR)/fhs.o $(ALT_DIR)/ghs.o
 
 $(DIST_INC): include/type_defs.inc include/net_bridge.inc include/net_errors.inc include/net_base.inc include/net_server.inc
 	mkdir -p dist
@@ -78,42 +84,38 @@ $(DIST_PC): Makefile
 	echo 'Libs: $${altdir}/fhs.o $${altdir}/ghs.o -L$${libdir} -lnet -lprf' >> $@
 	echo 'Cflags: -i$${includedir}' >> $@
 
-test: libnet.a
+test: libnet.a $(TEST_SERVER)
+ifeq ($(USE_DOCKER),1)
 	@failed=0; total=0; \
 	for src in $(TEST_SRCS); do \
 	  name=$$(basename $$src .pli); \
-	  case $$name in \
-	    dial_test|readall_test) continue ;; \
-	  esac; \
-	  total=$$((total + 1)); \
+	  total=$$((total+1)); \
 	  printf "  %-28s " "$$name"; \
 	  $(RUN) plic $(PLIFLAGS) $$src $(INC) -o $${src%.pli}.o; rc=$$?; \
-	  if [ $$rc -ne 0 ] && [ $$rc -ne 4 ]; then false; else true; fi && \
-	  $(RUN) gcc $(LDFLAGS) -o $${src%.pli} $${src%.pli}.o libnet.a $(LIBS) $(ALT_DIR)/fhs.o $(ALT_DIR)/ghs.o && \
-	  $(RUN) ./$${src%.pli} > /dev/null 2>&1 && \
-	  echo "PASS" || { echo "FAIL"; failed=$$((failed + 1)); }; \
+	  if [ $$rc -ne 0 ] && [ $$rc -ne 4 ]; then echo "COMPILE FAIL"; failed=$$((failed+1)); continue; fi; \
+	  $(RUN) gcc $(LDFLAGS) -o $${src%.pli} $${src%.pli}.o libnet.a $(LIBS) $(ALT_DIR)/fhs.o $(ALT_DIR)/ghs.o || { echo "LINK FAIL"; failed=$$((failed+1)); continue; }; \
+	  if $(DOCKER_RUN) bash -c './tests/server & pid=$$!; sleep 0.7; ./'$${src%.pli}'; rc=$$?; kill $$pid 2>/dev/null || true; wait $$pid 2>/dev/null || true; exit $$rc' > /tmp/$$name.out 2>&1; then \
+	    echo "PASS"; \
+	  else \
+	    echo "FAIL"; cat /tmp/$$name.out; failed=$$((failed+1)); \
+	  fi; \
 	done; \
-	echo ""; \
-	echo "$$total tests, $$((total - failed)) passed, $$failed failed"; \
-	[ $$failed -eq 0 ]
-
-test-client-server: libnet.a
-ifeq ($(USE_DOCKER),1)
-	@$(DOCKER_RUN) bash -c 'cd tests/client_server && \
-	  plic $(PLIFLAGS) server_app.pli -i ../../include -o server_app.o; rc=$$?; [ $$rc -eq 0 ] || [ $$rc -eq 4 ] && \
-	  plic $(PLIFLAGS) client_app.pli -i ../../include -o client_app.o; rc=$$?; [ $$rc -eq 0 ] || [ $$rc -eq 4 ] && \
-	  gcc $(LDFLAGS) -o server_app server_app.o ../../libnet.a $(LIBS) $(ALT_DIR)/fhs.o $(ALT_DIR)/ghs.o && \
-	  gcc $(LDFLAGS) -o client_app client_app.o ../../libnet.a $(LIBS) $(ALT_DIR)/fhs.o $(ALT_DIR)/ghs.o && \
-	  ./server_app & pid=$$!; sleep 1; \
-	  ./client_app; r=$$?; kill $$pid 2>/dev/null; exit $$r'
+	echo ""; echo "$$total tests, $$((total - failed)) passed, $$failed failed"; [ $$failed -eq 0 ]
 else
-	@cd tests/client_server && \
-	  plic $(PLIFLAGS) server_app.pli -i ../../include -o server_app.o; rc=$$?; [ $$rc -eq 0 ] || [ $$rc -eq 4 ] && \
-	  plic $(PLIFLAGS) client_app.pli -i ../../include -o client_app.o; rc=$$?; [ $$rc -eq 0 ] || [ $$rc -eq 4 ] && \
-	  gcc $(LDFLAGS) -o server_app server_app.o ../../libnet.a $(LIBS) $(ALT_DIR)/fhs.o $(ALT_DIR)/ghs.o && \
-	  gcc $(LDFLAGS) -o client_app client_app.o ../../libnet.a $(LIBS) $(ALT_DIR)/fhs.o $(ALT_DIR)/ghs.o && \
-	  ./server_app & pid=$$!; sleep 1; \
-	  ./client_app; r=$$?; kill $$pid 2>/dev/null; exit $$r
+	@failed=0; total=0; \
+	for src in $(TEST_SRCS); do \
+	  name=$$(basename $$src .pli); \
+	  total=$$((total+1)); \
+	  printf "  %-28s " "$$name"; \
+	  plic $(PLIFLAGS) $$src $(INC) -o $${src%.pli}.o; rc=$$?; \
+	  if [ $$rc -ne 0 ] && [ $$rc -ne 4 ]; then echo "COMPILE FAIL"; failed=$$((failed+1)); continue; fi; \
+	  gcc $(LDFLAGS) -o $${src%.pli} $${src%.pli}.o libnet.a $(LIBS) $(ALT_DIR)/fhs.o $(ALT_DIR)/ghs.o || { echo "LINK FAIL"; failed=$$((failed+1)); continue; }; \
+	  ./tests/server > /tmp/$$name.server.out 2>&1 & pid=$$!; sleep 0.7; \
+	  ./$${src%.pli} > /tmp/$$name.out 2>&1; rc=$$?; \
+	  kill $$pid 2>/dev/null || true; wait $$pid 2>/dev/null || true; \
+	  if [ $$rc -eq 0 ]; then echo "PASS"; else echo "FAIL"; cat /tmp/$$name.out; cat /tmp/$$name.server.out; failed=$$((failed+1)); fi; \
+	done; \
+	echo ""; echo "$$total tests, $$((total - failed)) passed, $$failed failed"; [ $$failed -eq 0 ]
 endif
 
 install: libnet.a $(DIST_INC) $(DIST_PC)
@@ -145,8 +147,8 @@ uninstall:
 clean:
 	rm -f $(OBJS) libnet.a
 	rm -rf dist
-	rm -f tests/*.o tests/*.map tests/client_server/*.o tests/client_server/*.map
-	rm -f tests/resolve tests/test_connect tests/test_errors tests/use_socket tests/readme_usage
-	rm -f tests/client_server/server_app tests/client_server/client_app
+	rm -f tests/*.o tests/*.lst tests/*.map
+	rm -f tests/server tests/http_get tests/echo tests/resolve_dial tests/close_shutdown
+	rm -f tests/server.o tests/http_get.o tests/echo.o tests/resolve_dial.o tests/close_shutdown.o
 
 distclean: clean uninstall

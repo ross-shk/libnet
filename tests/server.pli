@@ -1,0 +1,56 @@
+ main: proc options(main);
+ %include net;
+
+   dcl server like conncb;
+   dcl client like conncb;
+   dcl port port_t init(18080);
+   dcl backlog backlog_t init(5);
+   dcl buffer char(4096);
+   dcl reply char(4096) varying;
+   dcl msg char(256) varying;
+   dcl bytes size_t;
+
+   on condition(neterror) begin;
+     display('server error ' || oncode());
+     goto done;
+   end;
+
+   on attention begin;
+     goto done;
+   end;
+
+   call netnew(server, AF.INET, TYPE.STREAM, 0);
+   call netlisten(server, port, backlog);
+   display('server listening on ' || trim(char(port)));
+
+   call netaccept(server, client);
+   display('client connected');
+
+   bytes = netread(client, buffer);
+   if bytes <= 0 then do;
+     display('server no data');
+     goto done_client;
+   end;
+
+   msg = substr(buffer, 1, bytes);
+   display('server received ' || msg);
+
+   if index(msg, 'GET') = 1 then do;
+     reply = 'HTTP/1.1 200 OK' || LINE_END ||
+             'Content-Length: 27' || LINE_END ||
+             'Connection: close' || LINE_END || LINE_END ||
+             'Hello from PL/I test server';
+     bytes = netwrite(client, reply);
+     display('server sent http ' || char(bytes));
+   end;
+   else do;
+     bytes = netwrite(client, msg);
+     display('server echoed ' || char(bytes));
+   end;
+
+ done_client:
+   call netclose(client);
+ done:
+   call netclose(server);
+   display('server done');
+ end main;

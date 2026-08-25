@@ -1,0 +1,45 @@
+ main: proc options(main);
+ %include net;
+
+   dcl request char(512) varying;
+   dcl response char(4096);
+   dcl bytes size_t;
+   dcl conn like conncb;
+
+   on condition(neterror) begin;
+     display('http_get failed code ' || oncode());
+     stop;
+   end;
+
+   request = 'GET / HTTP/1.1' || LINE_END ||
+             'Host: 127.0.0.1:18080' || LINE_END ||
+             'Connection: close' || LINE_END || LINE_END;
+
+   call netdial(conn, '127.0.0.1:18080', AF.INET);
+
+   bytes = netwriteall(conn, request);
+   if bytes = 0 then do;
+     display('http_get write 0');
+     stop;
+   end;
+
+   bytes = netreadall(conn, response);
+   if bytes <= 0 then do;
+     display('http_get read 0');
+     stop;
+   end;
+
+   if index(response, '200 OK') = 0 then do;
+     display('http_get no 200');
+     display(substr(response, 1, bytes));
+     stop;
+   end;
+
+   if index(response, 'Hello from PL/I') = 0 then do;
+     display('http_get no body');
+     stop;
+   end;
+
+   display('http_get ok ' || trim(char(bytes)) || ' bytes');
+   call netclose(conn);
+ end main;

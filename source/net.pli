@@ -163,7 +163,7 @@
    dcl conn like conncb;
    dcl buffer char(*) varying;
 
-   declare n size_t;
+   dcl n size_t;
    dcl slice char(length(buffer));
 
    slice = buffer;

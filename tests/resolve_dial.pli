@@ -1,0 +1,54 @@
+ main: proc options(main);
+ %include net;
+
+   dcl conn like conncb;
+   dcl conn2 like conncb;
+   dcl hostname char(256) varying init('localhost');
+   dcl request char(512) varying;
+   dcl response char(4096);
+   dcl bytes size_t;
+
+   on condition(neterror) begin;
+     display('resolve_dial failed code ' || oncode());
+     stop;
+   end;
+
+   call netnew(conn, AF.INET, TYPE.STREAM, 0);
+   call netresolve(conn, hostname);
+
+   if length(trim(conn._ip)) = 0 then do;
+     display('resolve empty ip');
+     stop;
+   end;
+
+   /* AF.INET localhost should resolve to 127.0.0.1 */
+   if trim(conn._ip) ^= '127.0.0.1' then do;
+     display('resolve got ' || trim(conn._ip) || ' (expected 127.0.0.1)');
+     /* allow but warn - still continue if non-empty */
+   end;
+
+   display('resolve ok ' || trim(conn._ip));
+   call netclose(conn);
+
+   /* dial via hostname to same test server */
+   call netdial(conn2, 'localhost:18080', AF.INET);
+
+   request = 'GET / HTTP/1.1' || LINE_END ||
+             'Host: localhost' || LINE_END ||
+             'Connection: close' || LINE_END || LINE_END;
+
+   bytes = netwrite(conn2, request);
+   bytes = netread(conn2, response);
+   if bytes <= 0 then do;
+     display('dial read 0');
+     stop;
+   end;
+
+   if index(response, '200 OK') = 0 then do;
+     display('dial no 200');
+     stop;
+   end;
+
+   display('dial ok');
+   call netclose(conn2);
+ end main;
