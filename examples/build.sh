@@ -3,15 +3,23 @@
 
 set -e
 
+MODE="build"
+if [ "$1" = "run" ]; then
+  MODE="run"
+  shift
+fi
+
 if [ $# -lt 1 ]; then
-  echo "Usage: $0 <source.pli> [output_name]"
+  echo "Usage: $0 [run] <source.pli> [output_name]"
   echo ""
   echo "Builds a PL/I program that uses the net library."
   echo "  source.pli    - PL/I source file (required)"
   echo "  output_name   - Executable name (default: basename of source without .pli)"
+  echo "  run           - build and run the executable (via docker on macos)"
   echo ""
   echo "Examples:"
-  echo "  $0 use_net.pli"
+  echo "  $0 use_socket.pli"
+  echo "  $0 run readme_usage.pli"
   exit 1
 fi
 
@@ -58,3 +66,12 @@ $GCC -m32 -no-pie -z muldefs \
   $LIBS
 
 echo "=== Build complete: $OUTPUT ==="
+
+if [ "$MODE" = "run" ]; then
+  echo "=== Running $OUTPUT ==="
+  if ! command -v plic >/dev/null 2>&1; then
+    docker run --rm --platform linux/386 -v "$ROOT:/workspace" -w /workspace/examples ghcr.io/ross-shk/pli "./$OUTPUT"
+  else
+    "./$OUTPUT"
+  fi
+fi
