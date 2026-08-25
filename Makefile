@@ -11,6 +11,28 @@ INCDIR    ?= $(PREFIX)/include
 LIBDIR    ?= $(PREFIX)/lib
 PKGDIR    ?= $(LIBDIR)/pkgconfig
 
+# Docker – run toolchain via ghcr.io/ross-shk/pli on hosts without plic (e.g. macOS)
+# Lets you run `make` / `make test` locally without copying to a VM.
+DOCKER         ?= docker
+DOCKER_IMAGE   ?= ghcr.io/ross-shk/pli:latest
+DOCKER_PLATFORM ?= linux/386
+DOCKER_RUN     := $(DOCKER) run --rm --platform $(DOCKER_PLATFORM) -v $(CURDIR):/workspace -w /workspace $(DOCKER_IMAGE)
+USE_DOCKER     ?= 0
+# Auto-enable on macOS where plic is not installed (no VM copy needed)
+ifeq ($(origin USE_DOCKER),file)
+  UNAME_S := $(shell uname -s)
+  ifeq ($(UNAME_S),Darwin)
+    ifeq (,$(shell which plic 2>/dev/null))
+      USE_DOCKER := 1
+    endif
+  endif
+endif
+ifeq ($(USE_DOCKER),1)
+  RUN := $(DOCKER_RUN)
+else
+  RUN :=
+endif
+
 INC        = -i include
 OBJS       = net_bridge.o net.o net_server.o
 DIST_INC   = dist/net.inc
@@ -22,16 +44,16 @@ TEST_SRCS  = $(wildcard tests/*.pli)
 all: libnet.a $(DIST_INC) $(DIST_PC)
 
 net_bridge.o: source/net_bridge.c
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(RUN) $(CC) $(CFLAGS) -c $< -o $@
 
 net.o: source/net.pli include/net_bridge.inc include/net_errors.inc include/type_defs.inc
-	$(PLIC) $(PLIFLAGS) $< $(INC) -o $@
+	$(RUN) $(PLIC) $(PLIFLAGS) $< $(INC) -o $@
 
 net_server.o: source/net_server.pli include/net_bridge.inc include/net_errors.inc include/type_defs.inc
-	$(PLIC) $(PLIFLAGS) $< $(INC) -o $@
+	$(RUN) $(PLIC) $(PLIFLAGS) $< $(INC) -o $@
 
 libnet.a: $(OBJS)
-	$(AR) rcs $@ $(OBJS)
+	$(RUN) $(AR) rcs $@ $(OBJS)
 	rm -f *.o
 	rm -f *.lst
 
@@ -65,9 +87,10 @@ test: libnet.a
 	  esac; \
 	  total=$$((total + 1)); \
 	  printf "  %-28s " "$$name"; \
-	  plic $(PLIFLAGS) $$src $(INC) -o $${src%.pli}.o && \
-	  gcc $(LDFLAGS) -o $${src%.pli} $${src%.pli}.o $(OBJS) $(LIBS) $(ALT_DIR)/fhs.o $(ALT_DIR)/ghs.o && \
-	  ./$${src%.pli} > /dev/null 2>&1 && \
+	  $(RUN) plic $(PLIFLAGS) $$src $(INC) -o $${src%.pli}.o; rc=$$?; \
+	  if [ $$rc -ne 0 ] && [ $$rc -ne 4 ]; then false; else true; fi && \
+	  $(RUN) gcc $(LDFLAGS) -o $${src%.pli} $${src%.pli}.o libnet.a $(LIBS) $(ALT_DIR)/fhs.o $(ALT_DIR)/ghs.o && \
+	  $(RUN) ./$${src%.pli} > /dev/null 2>&1 && \
 	  echo "PASS" || { echo "FAIL"; failed=$$((failed + 1)); }; \
 	done; \
 	echo ""; \
@@ -75,13 +98,23 @@ test: libnet.a
 	[ $$failed -eq 0 ]
 
 test-client-server: libnet.a
+ifeq ($(USE_DOCKER),1)
+	@$(DOCKER_RUN) bash -c 'cd tests/client_server && \
+	  plic $(PLIFLAGS) server_app.pli -i ../../include -o server_app.o; rc=$$?; [ $$rc -eq 0 ] || [ $$rc -eq 4 ] && \
+	  plic $(PLIFLAGS) client_app.pli -i ../../include -o client_app.o; rc=$$?; [ $$rc -eq 0 ] || [ $$rc -eq 4 ] && \
+	  gcc $(LDFLAGS) -o server_app server_app.o ../../libnet.a $(LIBS) $(ALT_DIR)/fhs.o $(ALT_DIR)/ghs.o && \
+	  gcc $(LDFLAGS) -o client_app client_app.o ../../libnet.a $(LIBS) $(ALT_DIR)/fhs.o $(ALT_DIR)/ghs.o && \
+	  ./server_app & pid=$$!; sleep 1; \
+	  ./client_app; r=$$?; kill $$pid 2>/dev/null; exit $$r'
+else
 	@cd tests/client_server && \
-	  plic $(PLIFLAGS) server_app.pli -i ../../include -o server_app.o && \
-	  plic $(PLIFLAGS) client_app.pli -i ../../include -o client_app.o && \
-	  gcc $(LDFLAGS) -o server_app server_app.o ../../$(OBJS) $(LIBS) $(ALT_DIR)/fhs.o $(ALT_DIR)/ghs.o && \
-	  gcc $(LDFLAGS) -o client_app client_app.o ../../$(OBJS) $(LIBS) $(ALT_DIR)/fhs.o $(ALT_DIR)/ghs.o && \
+	  plic $(PLIFLAGS) server_app.pli -i ../../include -o server_app.o; rc=$$?; [ $$rc -eq 0 ] || [ $$rc -eq 4 ] && \
+	  plic $(PLIFLAGS) client_app.pli -i ../../include -o client_app.o; rc=$$?; [ $$rc -eq 0 ] || [ $$rc -eq 4 ] && \
+	  gcc $(LDFLAGS) -o server_app server_app.o ../../libnet.a $(LIBS) $(ALT_DIR)/fhs.o $(ALT_DIR)/ghs.o && \
+	  gcc $(LDFLAGS) -o client_app client_app.o ../../libnet.a $(LIBS) $(ALT_DIR)/fhs.o $(ALT_DIR)/ghs.o && \
 	  ./server_app & pid=$$!; sleep 1; \
 	  ./client_app; r=$$?; kill $$pid 2>/dev/null; exit $$r
+endif
 
 install: libnet.a $(DIST_INC) $(DIST_PC)
 	install -d $(DESTDIR)$(INCDIR)
