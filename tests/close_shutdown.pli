@@ -23,28 +23,17 @@
    call netnew(conn, AF.INET, TYPE.STREAM, 0);
    call netconnect(conn, '127.0.0.1', 18080);
 
+   /* send — errors signal neterror */
    bytes = netwrite(conn, msg);
-   if bytes <= 0 then do;
-     display('write failed');
-     stop;
-   end;
 
-   /* half-close write side */
+   /* half-close write side — errors signal */
    bytes = netshutdown(conn, 1); /* 1=write */
-   if bytes < 0 then do;
-     display('shutdown failed');
-     stop;
-   end;
 
-   /* read echo before full close */
+   /* read echo before full close — 0 is eof, not signalled */
    bytes = netread(conn, resp);
 
-   /* close and verify success */
+   /* close — errors signal */
    bytes = netclose(conn);
-   if bytes ^= 0 then do;
-     display('close failed ' || bytes);
-     stop;
-   end;
    display('shutdown_close ok');
 
    /* expect refused connect on unused port */

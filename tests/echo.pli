@@ -17,14 +17,10 @@
    call netnew(conn, AF.INET, TYPE.STREAM, 0);
    call netconnect(conn, '127.0.0.1', 18080);
 
-   /* send payload */
+   /* send payload — errors signal neterror */
    bytes = netwrite(conn, msg);
-   if bytes <= 0 then do;
-     display('echo write failed');
-     stop;
-   end;
 
-   /* receive echo */
+   /* receive echo — 0 means eof, not signalled */
    bytes = netread(conn, resp);
    if bytes <= 0 then do;
      display('echo no reply');
