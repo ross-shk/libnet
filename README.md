@@ -2,17 +2,6 @@
 
 A basic networking library for PL/I
 
-## Files
-
-| File | Purpose |
-|------|---------|
-| `type_defs.inc` | Named types (`conncb`, `port_t`, `buffer_t`, etc.) and the `conncb` structure |
-| `net_bridge.inc` | C function external declarations (`socket`, `bind`, `listen`, ...) |
-| `net.pli` / `.inc` | Object-oriented client socket methods (`net_dial`, `net_send`, `net_receive`, `net_close`, `net_shutdown`, `socket_errno`) |
-| `net_server.pli` / `.inc` | Server socket methods (`net_listen`, `net_accept`, `server_error`) |
-| `net_errors.inc` | `net_error` condition and `get_errno` entry |
-| `net_bridge.c` | C bridge: `default_accept`, `bind_to_port`, `connect_to_host`, `get_errno_value`, `resolve_hostname` |
-
 ## Usage
 
 ```pli
