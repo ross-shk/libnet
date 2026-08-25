@@ -69,9 +69,11 @@ echo "=== Build complete: $OUTPUT ==="
 
 if [ "$MODE" = "run" ]; then
   echo "=== Running $OUTPUT ==="
+  echo ""
   if ! command -v plic >/dev/null 2>&1; then
     docker run --rm --platform linux/386 -v "$ROOT:/workspace" -w /workspace/examples ghcr.io/ross-shk/pli "./$OUTPUT"
   else
     "./$OUTPUT"
   fi
+  echo ""
 fi
