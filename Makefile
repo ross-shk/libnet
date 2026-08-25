@@ -145,7 +145,7 @@ uninstall:
 	rm -f $(DESTDIR)$(PKGDIR)/net.pc
 
 clean:
-	rm -f $(OBJS) libnet.a
+	rm -f $(OBJS) libnet.a *.o *.lst *.map
 	rm -rf dist
 	rm -f tests/*.o tests/*.lst tests/*.map
 	rm -f tests/server tests/http_get tests/echo tests/resolve_dial tests/close_shutdown

@@ -1,4 +1,3 @@
-
  main: proc options(main);
  %include net;
 

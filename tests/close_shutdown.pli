@@ -23,16 +23,16 @@
    call netnew(conn, AF.INET, TYPE.STREAM, 0);
    call netconnect(conn, '127.0.0.1', 18080);
 
-   /* send — errors signal neterror */
+   /* send - errors signal neterror */
    bytes = netwrite(conn, msg);
 
-   /* half-close write side — errors signal */
+   /* half-close write side - errors signal */
    bytes = netshutdown(conn, 1); /* 1=write */
 
-   /* read echo before full close — 0 is eof, not signalled */
+   /* read echo before full close - 0 is eof, not signalled */
    bytes = netread(conn, resp);
 
-   /* close — errors signal */
+   /* close - errors signal */
    bytes = netclose(conn);
    display('shutdown_close ok');
 

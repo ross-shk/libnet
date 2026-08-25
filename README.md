@@ -39,7 +39,7 @@ A basic networking library for PL/I
 
 ## Build & Install
 
-Requires Iron Spring PL/I (`plic`) and `gcc` (`-m32`) — or Docker.
+Requires Iron Spring PL/I (`plic`) and `gcc` (`-m32`) - or Docker.
 
 On macOS without `plic` the Makefile auto-uses `ghcr.io/ross-shk/pli:latest`
 (`linux/386`) for `plic`/`gcc -m32`/`ar`, so no VM copy is needed:
@@ -63,7 +63,7 @@ Install:
 # Linux VM / natively-installed plic
 sudo make install              # or: make install PREFIX=$HOME/.local
 
-# Docker host (macOS) – host-visible prefix, not system /usr/local
+# Docker host (macOS) - host-visible prefix, not system /usr/local
 make install PREFIX=$PWD/local          # -> ./local/include/net.inc
 make install PREFIX=$HOME/.local
 make install DESTDIR=$PWD/out PREFIX=/usr/local  # staging
