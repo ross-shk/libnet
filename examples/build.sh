@@ -30,12 +30,43 @@ fi
 SOURCE="$1"
 OUTPUT="${2:-$(basename "$SOURCE" .pli)}"
 
+# auto use docker on hosts without plic (macos), fallback to local libnet.a if not installed
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+if ! command -v plic >/dev/null 2>&1; then
+  DOCKER="docker run --rm --platform linux/386 -v $ROOT:/workspace -w /workspace/examples ghcr.io/ross-shk/pli"
+  PLIC="$DOCKER plic"
+  GCC="$DOCKER gcc"
+else
+  PLIC="plic"
+  GCC="gcc"
+fi
+
+if pkg-config --exists net 2>/dev/null; then
+  CFLAGS=$(pkg-config --cflags net)
+  LIBS=$(pkg-config --libs net)
+else
+  echo "note: net.pc not found, using local libnet.a + include"
+  if [ ! -f "$ROOT/libnet.a" ]; then
+    echo "building $ROOT/libnet.a first..."
+    make -C "$ROOT" all
+  fi
+  # use workspace paths inside docker, host paths otherwise
+  if ! command -v plic >/dev/null 2>&1; then
+    CFLAGS="-i/workspace/include"
+    LIBS="/workspace/libnet.a -lprf /usr/lib/pli/alt/fhs.o /usr/lib/pli/alt/ghs.o"
+  else
+    CFLAGS="-i$ROOT/include"
+    LIBS="$ROOT/libnet.a -lprf /usr/lib/pli/alt/fhs.o /usr/lib/pli/alt/ghs.o"
+  fi
+fi
+
 echo "=== Compiling $SOURCE ==="
-plic -C -dELF "$SOURCE" $(pkg-config --cflags net) -o "${OUTPUT}.o"
+$PLIC -C -dELF "$SOURCE" $CFLAGS -o "${OUTPUT}.o"
 
 echo "=== Linking $OUTPUT ==="
-gcc -m32 -no-pie -z muldefs \
+$GCC -m32 -no-pie -z muldefs \
   -o "$OUTPUT" "${OUTPUT}.o" \
-  $(pkg-config --libs net) # ... ${ALT_DIR}/fhs.o ${ALT_DIR}/ghs.o -lnet -lprf
+  $LIBS
 
 echo "=== Build complete: $OUTPUT ==="
