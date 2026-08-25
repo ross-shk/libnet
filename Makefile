@@ -117,6 +117,19 @@ else
 endif
 
 install: libnet.a $(DIST_INC) $(DIST_PC)
+ifeq ($(USE_DOCKER),1)
+	@if [ "$(PREFIX)" = "/usr/local" ] && [ -z "$(DESTDIR)" ]; then \
+	  echo "ERROR: USE_DOCKER=1 – refusing 'make install' to host /usr/local" >&2; \
+	  echo "  On a Docker host the built libnet.a is linux/386 and not usable on macOS." >&2; \
+	  echo "  Use a host-visible prefix:" >&2; \
+	  echo "    make install PREFIX=\$$PWD/local" >&2; \
+	  echo "    make install PREFIX=\$$HOME/.local" >&2; \
+	  echo "  Or stage via DESTDIR:" >&2; \
+	  echo "    make install DESTDIR=\$$PWD/out PREFIX=/usr/local" >&2; \
+	  echo "  Override with 'make install USE_DOCKER=0 PREFIX=/usr/local' inside VM." >&2; \
+	  exit 1; \
+	fi
+endif
 	install -d $(DESTDIR)$(INCDIR)
 	install -d $(DESTDIR)$(LIBDIR)
 	install -d $(DESTDIR)$(PKGDIR)
