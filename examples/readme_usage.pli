@@ -1,4 +1,11 @@
- /* Copyright 2026 Ross Shkurat - Apache-2.0, see LICENSE */
+ /* Copyright 2026 Ross Shkurat - Apache-2.0, see LICENSE 
+    
+    A basic example of using libnet to make a simple HTTP GET 
+    request to a server and read the response, with error handling.
+
+    Run with:
+      ./build.sh run readme_usage.pli
+ */
 
  main: procedure options(main);
  %include net;
@@ -9,8 +16,8 @@
      host     char(256) varying init('example.com:80'),
      bytes    size_t,
      conn     like conncb;
-
-   on condition(neterror) begin;
+  
+   on condition(neterror) begin;  /* handle low-level network errors */
      display('Networking error, code = ' || oncode());
      goto done;
    end;
@@ -20,11 +27,12 @@
        'Host: ' || host    || LINE_END ||
        'Connection: close' || LINE_END || LINE_END;
    
-   call netdial(conn, host, AF.INET);
+   call netdial(conn, host, AF.INET);  /* host is auto-resolved */
 
    call netwriteall(conn, request); 
    bytes = netreadall(conn, response);
 
+   /* only reached unless there's a network error */
    display('Response ' || substr(response, 1, bytes));
  
  done:
