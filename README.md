@@ -5,7 +5,7 @@ A basic networking library for PL/I
 ## Usage
 
 ```pli
- main: procedure options(main);
+main: procedure options(main);
  %include net;
 
    declare
@@ -14,8 +14,8 @@ A basic networking library for PL/I
      host     char(256) varying init('example.com:80'),
      bytes    size_t,
      conn     like conncb;
-
-   on condition(neterror) begin;
+  
+   on condition(neterror) begin;  /* handle low-level network errors */
      display('Networking error, code = ' || oncode());
      goto done;
    end;
@@ -25,11 +25,12 @@ A basic networking library for PL/I
        'Host: ' || host    || LINE_END ||
        'Connection: close' || LINE_END || LINE_END;
    
-   call netdial(conn, host, AF.INET);
+   call netdial(conn, host, AF.INET);  /* host is auto-resolved */
 
    call netwriteall(conn, request); 
    bytes = netreadall(conn, response);
 
+   /* only reached unless there's a network error */
    display('Response ' || substr(response, 1, bytes));
  
  done:
