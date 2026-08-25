@@ -13,8 +13,7 @@
   main: proc options(main);
   %include net;
 
-    dcl sysprint file print;
-    dcl server    like conncb;
+   dcl server    like conncb;
    dcl client    like conncb;
    dcl port      port_t init(8090);
    dcl backlog   backlog_t init(5);
@@ -29,7 +28,7 @@
    end;
 
    on condition(neterror) begin;  /* handle low-level network errors */
-     put skip list('Socket error, code =', oncode());
+     display('Socket error, code =' || oncode());
      goto done;
    end;
     
@@ -39,37 +38,37 @@
    /* bind and listen */
    call netlisten(server, port, backlog);
 
-   put skip list('Server listening on port', port);
+   display('Server listening on port ' || port);
 
    /* accept one client */
    call netaccept(server, client);
 
-   put skip list('Client connected');
+   display('Client connected');
 
    /* read what the client sent */
    bytes = netread(client, buffer);
    if bytes < 0 then do;
-     put skip list('netread failed');
+     display('netread failed');
      stop;
    end;
 
    if bytes > 0 then do;
      message = substr(buffer, 1, bytes);
-     put skip list('Received:', message);
+     display('Received: ' || message);
 
      /* echo it back */
      bytes = netwrite(client, message);
      if bytes < 0 then do;
-       put skip list('netwrite failed');
+       display('netwrite failed');
        stop;
      end;
 
-     put skip list('Echoed back');
+     display('Echoed back');
    end;
 
    call netclose(client);
    call netclose(server);
 
  done:
-   put skip list('Server shut down');
+   display('Server shut down');
  end main;

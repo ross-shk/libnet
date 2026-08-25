@@ -14,8 +14,7 @@
 
   %include net;
 
-    dcl sysprint file print;
-    dcl conn     like conncb;
+   dcl conn     like conncb;
    dcl host     char(256);
    dcl port     fixed bin(31) init(8090);
    dcl request  char(256) varying;
@@ -24,29 +23,29 @@
 
    on attention begin;  /* allow clean shutdown on interrupt */
      call netclose(conn);
-     put skip list('Client shut down');
+     display('Client shut down');
      stop;
    end;
 
    host = '127.0.0.1';
    request = 'Hello from PL/I client!' || LINE_END;
 
-   put skip list('Connecting to', trim(host), port);
+   display('Connecting to ' || trim(host) || ':' || port);
 
    call netnew(conn, AF.INET, TYPE.STREAM, 0);
    call netconnect(conn, host, port);  /* connect to server */
 
-    put skip list('Connected');
+   display('Connected');
 
    bytes = netwrite(conn, request);  /* send message */
-   put skip list('Sent', bytes, 'bytes');
+   display('Sent ' || bytes || ' bytes');
 
    bytes = netread(conn, response);  /* read echo */
    if bytes > 0 then
-     put skip list('Received:', substr(response, 1, bytes));
+     display('Received: ' || substr(response, 1, bytes));
    else
-     put skip list('No response received');
+     display('No response received');
 
    call netclose(conn);
-   put skip list('Client done');
+   display('Client done');
  end main;
