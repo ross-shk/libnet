@@ -1,31 +1,37 @@
  main: proc options(main);
  %include net;
 
+   /* e2e: manual connect + write/read echo */
    dcl conn like conncb;
    dcl msg char(256) varying init('Hello PL/I echo!');
    dcl resp char(4096);
    dcl bytes size_t;
 
+   /* abort on any network error */
    on condition(neterror) begin;
      display('echo failed code ' || oncode());
      stop;
    end;
 
+   /* create socket and connect to test server */
    call netnew(conn, AF.INET, TYPE.STREAM, 0);
    call netconnect(conn, '127.0.0.1', 18080);
 
+   /* send payload */
    bytes = netwrite(conn, msg);
    if bytes <= 0 then do;
      display('echo write failed');
      stop;
    end;
 
+   /* receive echo */
    bytes = netread(conn, resp);
    if bytes <= 0 then do;
      display('echo no reply');
      stop;
    end;
 
+   /* verify echo matches sent data */
    if substr(resp, 1, bytes) ^= msg then do;
      display('echo mismatch');
      display('got: ' || substr(resp, 1, bytes));

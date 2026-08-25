@@ -1,6 +1,7 @@
  main: proc options(main);
  %include net;
 
+   /* fixture: single-client echo/http server for e2e tests */
    dcl server like conncb;
    dcl client like conncb;
    dcl port port_t init(18080);
@@ -10,22 +11,27 @@
    dcl msg char(256) varying;
    dcl bytes size_t;
 
+   /* fail fast on socket errors */
    on condition(neterror) begin;
      display('server error ' || oncode());
      goto done;
    end;
 
+   /* allow harness to kill server cleanly */
    on attention begin;
      goto done;
    end;
 
+   /* create and bind listening socket */
    call netnew(server, AF.INET, TYPE.STREAM, 0);
    call netlisten(server, port, backlog);
    display('server listening on ' || trim(char(port)));
 
+   /* accept one client for this test iteration */
    call netaccept(server, client);
    display('client connected');
 
+   /* read client request */
    bytes = netread(client, buffer);
    if bytes <= 0 then do;
      display('server no data');
@@ -35,6 +41,7 @@
    msg = substr(buffer, 1, bytes);
    display('server received ' || msg);
 
+   /* serve http for GET, echo otherwise to cover both use cases */
    if index(msg, 'GET') = 1 then do;
      reply = 'HTTP/1.1 200 OK' || LINE_END ||
              'Content-Length: 27' || LINE_END ||
@@ -49,8 +56,10 @@
    end;
 
  done_client:
+   /* close client connection */
    call netclose(client);
  done:
+   /* close listening socket and exit */
    call netclose(server);
    display('server done');
  end main;

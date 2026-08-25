@@ -1,34 +1,41 @@
  main: proc options(main);
  %include net;
 
+   /* e2e: http get via netdial + writeall/readall */
    dcl request char(512) varying;
    dcl response char(4096);
    dcl bytes size_t;
    dcl conn like conncb;
 
+   /* abort on any network error */
    on condition(neterror) begin;
      display('http_get failed code ' || oncode());
      stop;
    end;
 
+   /* build minimal http request */
    request = 'GET / HTTP/1.1' || LINE_END ||
              'Host: 127.0.0.1:18080' || LINE_END ||
              'Connection: close' || LINE_END || LINE_END;
 
+   /* dial server via url (host:port) */
    call netdial(conn, '127.0.0.1:18080', AF.INET);
 
+   /* send full request, retrying short writes */
    bytes = netwriteall(conn, request);
    if bytes = 0 then do;
      display('http_get write 0');
      stop;
    end;
 
+   /* read full response until close */
    bytes = netreadall(conn, response);
    if bytes <= 0 then do;
      display('http_get read 0');
      stop;
    end;
 
+   /* verify http status and body */
    if index(response, '200 OK') = 0 then do;
      display('http_get no 200');
      display(substr(response, 1, bytes));

@@ -1,6 +1,7 @@
  main: proc options(main);
  %include net;
 
+   /* e2e: orderly shutdown/close and refused connect */
    dcl conn like conncb;
    dcl conn2 like conncb;
    dcl msg char(256) varying init('shutdown test');
@@ -8,6 +9,7 @@
    dcl bytes size_t;
    dcl expect_error bit(1) init('0'b);
 
+   /* handle expected vs unexpected errors */
    on condition(neterror) begin;
      if expect_error then do;
        display('expected neterror ' || oncode() || ' ok');
@@ -17,7 +19,7 @@
      stop;
    end;
 
-   /* positive: connect, write, shutdown write, read echo, close */
+   /* connect and exchange data */
    call netnew(conn, AF.INET, TYPE.STREAM, 0);
    call netconnect(conn, '127.0.0.1', 18080);
 
@@ -27,16 +29,17 @@
      stop;
    end;
 
+   /* half-close write side */
    bytes = netshutdown(conn, 1); /* 1=write */
    if bytes < 0 then do;
      display('shutdown failed');
      stop;
    end;
 
-   /* server should have echoed before close */
+   /* read echo before full close */
    bytes = netread(conn, resp);
-   /* allow 0 if server closed after shutdown, but not error */
 
+   /* close and verify success */
    bytes = netclose(conn);
    if bytes ^= 0 then do;
      display('close failed ' || bytes);
@@ -44,7 +47,7 @@
    end;
    display('shutdown_close ok');
 
-   /* negative: connect to unused port should raise neterror */
+   /* expect refused connect on unused port */
    expect_error = '1'b;
    call netnew(conn2, AF.INET, TYPE.STREAM, 0);
    call netconnect(conn2, '127.0.0.1', 18099);
