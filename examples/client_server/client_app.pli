@@ -1,3 +1,15 @@
+  /* Copyright 2026 Ross Shkurat - Apache-2.0, see LICENSE 
+    
+     Echo client example using netnew/netconnect.
+     Connects to the echo server, sends a message and
+     reads the echo reply. Shows netconnect, netwrite,
+     netread and attention handling.
+
+     Run with:
+       ./build.sh run client_app.pli
+       (needs server on 127.0.0.1:8090)
+  */
+
   main: proc options(main);
 
  %include net;
@@ -9,7 +21,7 @@
    dcl response char(4096);
    dcl bytes    size_t;
 
-   on attention begin;
+   on attention begin;  /* allow clean shutdown on interrupt */
      call netclose(conn);
      put skip list('Client shut down');
      stop;
@@ -21,13 +33,14 @@
    put skip list('Connecting to', trim(host), port);
 
    call netnew(conn, AF.INET, TYPE.STREAM, 0);
-   call netconnect(conn, host, port);
-   put skip list('Connected');
+   call netconnect(conn, host, port);  /* connect to server */
 
-   bytes = netwrite(conn, request);
+    put skip list('Connected');
+
+   bytes = netwrite(conn, request);  /* send message */
    put skip list('Sent', bytes, 'bytes');
 
-   bytes = netread(conn, response);
+   bytes = netread(conn, response);  /* read echo */
    if bytes > 0 then
      put skip list('Received:', substr(response, 1, bytes));
    else

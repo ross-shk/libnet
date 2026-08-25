@@ -1,4 +1,12 @@
- /* Copyright 2026 Ross Shkurat - Apache-2.0, see LICENSE */
+ /* Copyright 2026 Ross Shkurat - Apache-2.0, see LICENSE 
+    
+     Manual socket example using netnew/netconnect and netwrite/netread 
+     to fetch a simple HTTP response. Shows explicit host/port handling
+     and basic display.              
+
+     Run with (needs a server on 127.0.0.1:8080 or update host/port):
+       ./build.sh run use_socket.pli
+ */
 
  main: proc options(main);
  %include net;
@@ -19,13 +27,14 @@
    display("REQUEST: " || LINE_END || trim(char(request)));
    
    call netnew(conn, AF.INET, TYPE.STREAM, 0);
-   call netconnect(conn, host, port);
+   call netconnect(conn, host, port);  /* connect to host:port */
+
    display("       CONNECTED...");
 
-   bytes_sent = netwrite(conn, request);
+   bytes_sent = netwrite(conn, request);  /* send request */
    display(' >> bytes sent ' || trim(char(bytes_sent)));
 
-   bytes_received = netread(conn, response);
+   bytes_received = netread(conn, response);  /* read response */
    display(' >> bytes received ' || bytes_received);
    display(' >> response ' || substr(response, 1, bytes_received));
 

@@ -1,17 +1,26 @@
- main: proc options(main);
- %include net;
+  /* Copyright 2026 Ross Shkurat - Apache-2.0, see LICENSE 
+    
+     Minimal example of hostname resolution using netresolve.
+     Shows netnew, netresolve and basic error handling.
 
-   dcl conn like conncb;
-   dcl hostname char(256) varying init('www.example.com');
+     Run with:
+       ./build.sh run resolve.pli
+  */
 
-   on condition(neterror) begin;
-     display('Resolution failed, errno =' || oncode());
-     stop;
-   end;
+  main: proc options(main);
+  %include net;
 
-   call netnew(conn, AF.INET, TYPE.STREAM, 0);
-   call netresolve(conn, hostname);
+    dcl conn like conncb;
+    dcl hostname char(256) varying init('www.example.com');
 
-   display('Resolved ' || trim(conn._host) || ' to ' || trim(conn._ip));
+    on condition(neterror) begin;  /* handle low-level network errors */
+      display('Resolution failed, errno =' || oncode());
+      stop;
+    end;
 
- end;
+    call netnew(conn, AF.INET, TYPE.STREAM, 0);
+    call netresolve(conn, hostname);  /* hostname is auto-resolved */
+
+    display('Resolved ' || trim(conn._host) || ' to ' || trim(conn._ip));
+
+  end;
