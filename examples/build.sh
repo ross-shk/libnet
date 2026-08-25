@@ -24,7 +24,11 @@ if [ $# -lt 1 ]; then
 fi
 
 SOURCE="$1"
-OUTPUT="${2:-$(basename "$SOURCE" .pli)}"
+if [ -n "$2" ]; then
+  OUTPUT="$2"
+else
+  OUTPUT="${SOURCE%.pli}"
+fi
 
 # auto use docker on hosts without plic (macos), fallback to local libnet.a if not installed
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

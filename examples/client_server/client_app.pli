@@ -12,9 +12,10 @@
 
   main: proc options(main);
 
- %include net;
+  %include net;
 
-   dcl conn     like conncb;
+    dcl sysprint file print;
+    dcl conn     like conncb;
    dcl host     char(256);
    dcl port     fixed bin(31) init(8090);
    dcl request  char(256) varying;

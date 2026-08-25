@@ -13,7 +13,8 @@
   main: proc options(main);
   %include net;
 
-   dcl server    like conncb;
+    dcl sysprint file print;
+    dcl server    like conncb;
    dcl client    like conncb;
    dcl port      port_t init(8090);
    dcl backlog   backlog_t init(5);
