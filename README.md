@@ -102,7 +102,7 @@ then run:
 ./readme_usage
 ```
 
-Linking against `fhs.o` and `ghs.o` is required for interoperability with C networking functions.
+Linking against `fhs.o` and `ghs.o` (shipped as part of Iron Spring PL/I) is required for interoperability with C networking functions.
 
 If using Docker, mount the project root so `../include` and `../libnet.a` are visible - same commands via helper (works in `bash`/`zsh`):
 
