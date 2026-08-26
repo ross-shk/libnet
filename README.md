@@ -42,9 +42,9 @@ main: procedure options(main);
    end;
 
     request =
-        'GET / HTTP/1.1'    || LINE_END ||
-        'Host: ' || host    || LINE_END ||
-        'Connection: close' || LINE_END || LINE_END;
+        'GET / HTTP/1.1'    || CR_LF ||
+        'Host: ' || host    || CR_LF ||
+        'Connection: close' || CR_LF || CR_LF;
    
    call netdial(conn, host, AF.INET);  /* host is auto-resolved */
 
