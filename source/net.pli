@@ -58,7 +58,7 @@
      call netconnect(conn, conn._ip, port);
    end;
    else
-     call netconnect(conn, conn._ip, port);
+     call netconnect(conn, host, port);
 
    split_url: proc;
      dcl pos fixed bin(31);
