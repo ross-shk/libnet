@@ -2,7 +2,28 @@
 
 A basic networking library for PL/I
 
+## Build & Install
+
+Requires Iron Spring PL/I and `gcc`, or similar.
+
+The Makefile auto-uses `ghcr.io/ross-shk/pli:latest` (also available from the GitHub [repo](https://github.com/ross-shk/pli-docker)) if no Iron Spring PL/I is available:
+
+```sh
+make                
+make test
+```
+
+Install - only on systems with PL/I installed natively:
+
+```sh
+sudo make install             
+```
+
+Or just use `libnet.a` available in the project root after build directly.
+
 ## Usage
+
+See `examples/readme_usage.pli`:
 
 ```pli
 main: procedure options(main);
@@ -38,83 +59,60 @@ main: procedure options(main);
  end;
 ```
 
-## Build & Install
-
-Requires Iron Spring PL/I (`plic`) and `gcc` (`-m32`) - or Docker.
-
-On macOS without `plic` the Makefile auto-uses `ghcr.io/ross-shk/pli:latest`
-(`linux/386`) for `plic`/`gcc -m32`/`ar`, so no VM copy is needed:
-
-```sh
-make                # builds libnet.a via Docker on macOS, native on Linux
-make test
-make test-client-server
-```
-
-Override with `USE_DOCKER=0` (force native) or `USE_DOCKER=1` (force Docker):
-
-```sh
-make USE_DOCKER=1
-make test USE_DOCKER=1
-```
-
-Install:
-
-```sh
-# Linux VM / natively-installed plic
-sudo make install              # or: make install PREFIX=$HOME/.local
-
-# Docker host (macOS) - host-visible prefix, not system /usr/local
-make install PREFIX=$PWD/local          # -> ./local/include/net.inc
-make install PREFIX=$HOME/.local
-make install DESTDIR=$PWD/out PREFIX=/usr/local  # staging
-```
-
-`make install` to default `PREFIX=/usr/local` without `DESTDIR` is blocked
-when `USE_DOCKER=1` (would write linux/386 `libnet.a` to macOS `/usr/local`).
-
 ## Run an Example
 
-After `make install`, compile and link against the installed library:
+You can build and run code in `./examples` using the provided `build.sh` which either uses the Docker image or natively installed PL/I compiler if available:
 
 ```sh
 cd examples
 
-plic -C -dELF readall_test.pli    \
+./build.sh run readme_usage.pli
+```
+
+On a system with the Iron Spring PL/I or a similar compiler installed directly, you can compile and link using the following commands (make sure to build and install this library first, see [Build & Install](#build--install) above):
+
+```sh
+cd examples
+
+plic -C -dELF readme_usage.pli    \
   $(pkg-config --cflags net)      \  
-  -o readall_test.o
+  -o readme_usage.o
 
 gcc -m32 -no-pie -z muldefs        \   
-  -o readall_test readall_test.o   \
+  -o readme_usage readme_usage.o   \
   $(pkg-config --libs net)                 
 ```
 
 **NOTE:** `pkg-config` handles the library paths only. The remaining flags are toolchain requirements (Iron Spring PL/I's 32-bit ELF target) and don't change between projects.
 
-Without installing, link against the local build:
+Without installing, compile and link against the local build:
 
 ```sh
-make                       # provides libnet.a + dist/net.inc
-# then compile manually (needs plic/gcc -m32 or Docker):
-plic -C -dELF -I../include myprog.pli -o myprog.o
-gcc -m32 -no-pie -z muldefs -o myprog myprog.o libnet.a -lprf /usr/lib/pli/alt/fhs.o /usr/lib/pli/alt/ghs.o
+# from examples/
+
+plic -C -dELF -i../include readme_usage.pli -o readme_usage.o
+
+gcc -m32 -no-pie -z muldefs -o readme_usage readme_usage.o ../libnet.a \
+  -lprf /usr/lib/pli/alt/fhs.o /usr/lib/pli/alt/ghs.o
 ```
 
-Or build with a script:
+then run:
 
 ```sh
-cd examples
-./build.sh readall_test.pli   # uses pkg-config after install, or local libnet.a
+./readme_usage
 ```
 
-On macOS without `plic`, the `make` targets above are auto-Dockerized. For manual
-`plic`/`gcc` invocations use Docker:
+If using Docker, mount the project root so `../include` and `../libnet.a` are visible — same commands via helper (works in `bash`/`zsh`):
 
 ```sh
-docker run --rm --platform linux/386 -v $PWD:/workspace -w /workspace \
-  ghcr.io/ross-shk/pli plic -C -dELF myprog.pli -I../include -o myprog.o
-docker run --rm --platform linux/386 -v $PWD:/workspace -w /workspace \
-  ghcr.io/ross-shk/pli gcc -m32 -no-pie -z muldefs -o myprog myprog.o libnet.a -lprf /usr/lib/pli/alt/fhs.o /usr/lib/pli/alt/ghs.o
+# from examples/
+d() { docker run --rm --platform linux/386 -v $PWD/..:/workspace -w /workspace/examples ghcr.io/ross-shk/pli "$@"; }
+
+d plic -C -dELF -i../include readme_usage.pli -o readme_usage.o
+
+d gcc -m32 -no-pie -z muldefs -o readme_usage readme_usage.o ../libnet.a -lprf /usr/lib/pli/alt/fhs.o /usr/lib/pli/alt/ghs.o
+
+d ./readme_usage
 ```
 
 ## License
