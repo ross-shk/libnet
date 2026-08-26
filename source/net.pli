@@ -211,7 +211,7 @@
 
    dcl err_code fixed bin(31) init(0);
    
-   if conn._fd > 0 then do;
+   if conn._fd >= 0 then do;
      err_code = close(conn._fd);
      if err_code < 0 then do;
        signal condition(neterror) set oncode(get_errno());
