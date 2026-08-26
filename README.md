@@ -102,17 +102,20 @@ then run:
 ./readme_usage
 ```
 
-If using Docker, mount the project root so `../include` and `../libnet.a` are visible — same commands via helper (works in `bash`/`zsh`):
+Linking against `fhs.o` and `ghs.o` is required for interoperability with C networking functions.
+
+If using Docker, mount the project root so `../include` and `../libnet.a` are visible - same commands via helper (works in `bash`/`zsh`):
 
 ```sh
 # from examples/
-d() { docker run --rm --platform linux/386 -v $PWD/..:/workspace -w /workspace/examples ghcr.io/ross-shk/pli "$@"; }
 
-d plic -C -dELF -i../include readme_usage.pli -o readme_usage.o
+dockerize() { docker run --rm --platform linux/386 -v $PWD/..:/workspace -w /workspace/examples ghcr.io/ross-shk/pli "$@"; }
 
-d gcc -m32 -no-pie -z muldefs -o readme_usage readme_usage.o ../libnet.a -lprf /usr/lib/pli/alt/fhs.o /usr/lib/pli/alt/ghs.o
+dockerize plic -C -dELF -i../include readme_usage.pli -o readme_usage.o
 
-d ./readme_usage
+dockerize gcc -m32 -no-pie -z muldefs -o readme_usage readme_usage.o ../libnet.a -lprf /usr/lib/pli/alt/fhs.o /usr/lib/pli/alt/ghs.o
+
+dockerize ./readme_usage
 ```
 
 ## License
