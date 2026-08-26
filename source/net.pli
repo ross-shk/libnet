@@ -11,14 +11,14 @@
    dcl conn like conncb;
    dcl (family, type, flag) fixed bin(31);
 
-   conn._fd = socket(family, type, flag);
-   if conn._fd < 0 then do;
+   conn.fd = socket(family, type, flag);
+   if conn.fd < 0 then do;
      signal condition(neterror) set oncode(get_errno());
      return;
    end;
-   conn._family = family;
-   conn._type = type;
-   conn._flag = flag;
+   conn.addr_family = family;
+   conn.sock_type = type;
+   conn.flags = flag;
  end netnew;
 
  netconnect: proc(conn, ip, port);
@@ -31,16 +31,16 @@
      dcl c_ip char(257);
 
      c_ip = trim(substr(ip, 1, length(ip))) || '00'x;
-     status = connect(addr(c_ip), port, conn._fd, conn._family);
+     status = connect(addr(c_ip), port, conn.fd, conn.addr_family);
      if status < 0 then do;
        signal condition(neterror) set oncode(get_errno());
        return;
      end;
    end;
    
-   conn._host = ip;
-   conn._port = port;
-   conn._connected = '1'b;
+   conn.host_name = ip;
+   conn.port = port;
+   conn.is_connected = '1'b;
  end netconnect;
 
  netdial: proc(conn, url, family);
@@ -55,7 +55,7 @@
    call netnew(conn, family, TYPE.STREAM, 0);
    if is_hostname then do;
      call netresolve(conn, host);
-     call netconnect(conn, conn._ip, port);
+     call netconnect(conn, conn.ip_addr, port);
    end;
    else
      call netconnect(conn, host, port);
@@ -91,7 +91,7 @@
    begin;
      dcl slice char(length(request));
      slice = request;
-     bytes_sent = send(conn._fd, addr(slice), length(request), flags);
+     bytes_sent = send(conn.fd, addr(slice), length(request), flags);
    end;
 
    if bytes_sent < 0 then do;
@@ -107,7 +107,7 @@
 
    dcl bytes_received fixed bin(31) init(0);
 
-   bytes_received = receive(conn._fd, addr(response), 
+   bytes_received = receive(conn.fd, addr(response), 
       length(response), flags);
    if bytes_received < 0 then do;
      signal condition(neterror) set oncode(get_errno());
@@ -131,7 +131,7 @@
      slice = buffer;
 
      do while(bytes_written < length(buffer));
-      n = write(conn._fd, addr(slice) + bytes_written,
+      n = write(conn.fd, addr(slice) + bytes_written,
                     length(buffer) - bytes_written);
         if n <= 0 then leave;
         bytes_written = bytes_written + n;
@@ -153,7 +153,7 @@
    dcl slice char(length(buffer));
 
    slice = buffer;
-   n = write(conn._fd, addr(slice), length(buffer));
+   n = write(conn.fd, addr(slice), length(buffer));
 
    if n < 0 then do;
      signal condition(neterror) set oncode(get_errno());
@@ -167,7 +167,7 @@
    dcl buffer char(*);
    dcl bytes_read size_t;
 
-   bytes_read = read(conn._fd, addr(buffer), length(buffer));
+   bytes_read = read(conn.fd, addr(buffer), length(buffer));
 
    if bytes_read < 0 then do;
      signal condition(neterror) set oncode(get_errno());
@@ -190,7 +190,7 @@
      dcl n size_t;
 
      do while(total_read < length(buffer));
-       n = read(conn._fd, buf_ptr + total_read,
+       n = read(conn.fd, buf_ptr + total_read,
                 length(buffer) - total_read);
        if n < 0 then do;
          signal condition(neterror) set oncode(get_errno());
@@ -211,13 +211,13 @@
 
    dcl err_code fixed bin(31) init(0);
    
-   if conn._fd >= 0 then do;
-     err_code = close(conn._fd);
+   if conn.fd >= 0 then do;
+     err_code = close(conn.fd);
      if err_code < 0 then do;
        signal condition(neterror) set oncode(get_errno());
        return(err_code);
      end;
-     conn._connected = '0'b;
+     conn.is_connected = '0'b;
    end;
    return(err_code);
  end netclose;
@@ -227,7 +227,7 @@
    dcl how shut_how_t;
    dcl err fixed bin(31);
 
-   err = shutdown(conn._fd, how);
+   err = shutdown(conn.fd, how);
    if err < 0 then do;
      signal condition(neterror) set oncode(get_errno());
      return(err);
@@ -246,7 +246,7 @@
 
    begin;
      c_host = substr(hostname, 1, length(hostname)) || '00'x;
-     rc = resolve_hostname(addr(c_host), conn._family, 
+     rc = resolve_hostname(addr(c_host), conn.addr_family, 
        addr(ip_buf), length(ip_buf));
 
      if rc < 0 then do;
@@ -258,8 +258,8 @@
    null_pos = index(ip_buf, '00'x);
    if null_pos = 0 then null_pos = length(ip_buf) + 1;
    
-   conn._host = trim(substr(hostname, 1, length(hostname)));
-   conn._ip = substr(ip_buf, 1, null_pos - 1);
+   conn.host_name = trim(substr(hostname, 1, length(hostname)));
+   conn.ip_addr = substr(ip_buf, 1, null_pos - 1);
  end netresolve;
 
  end net;

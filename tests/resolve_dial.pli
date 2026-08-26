@@ -19,17 +19,18 @@
    call netnew(conn, AF.INET, TYPE.STREAM, 0);
    call netresolve(conn, hostname);
 
-   if length(trim(conn._ip)) = 0 then do;
+   if length(trim(conn.ip_addr)) = 0 then do;
      display('resolve empty ip');
      stop;
    end;
 
    /* localhost should resolve to loopback */
-   if trim(conn._ip) ^= '127.0.0.1' then do;
-     display('resolve got ' || trim(conn._ip) || ' (expected 127.0.0.1)');
+   if trim(conn.ip_addr) ^= '127.0.0.1' then do;
+     display('resolve got ' || trim(conn.ip_addr));
+     display(' expected 127.0.0.1');
    end;
 
-   display('resolve ok ' || trim(conn._ip));
+   display('resolve ok ' || trim(conn.ip_addr));
    call netclose(conn);
 
    /* dial via hostname url and fetch http */

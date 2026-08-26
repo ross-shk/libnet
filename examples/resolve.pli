@@ -21,6 +21,7 @@
     call netnew(conn, AF.INET, TYPE.STREAM, 0);
     call netresolve(conn, hostname);  /* hostname is auto-resolved */
 
-    display('Resolved ' || trim(conn._host) || ' to ' || trim(conn._ip));
+    display('Resolved ' || trim(conn.host_name)
+            || ' to ' || trim(conn.ip_addr));
 
   end;

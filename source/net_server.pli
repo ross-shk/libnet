@@ -10,18 +10,18 @@
    dcl port    port_t;
    dcl backlog backlog_t;
 
-    if bind(conn._fd, port, conn._family, INADDR.ANY) < 0 then do;
+    if bind(conn.fd, port, conn.addr_family, INADDR.ANY) < 0 then do;
       signal condition(neterror) set oncode(get_errno());
       return;
     end;
 
-    if listen(conn._fd, backlog) < 0 then do;
+    if listen(conn.fd, backlog) < 0 then do;
       signal condition(neterror) set oncode(get_errno());
       return;
     end;
 
-    conn._port = port;
-    conn._connected = '1'b;
+    conn.port = port;
+    conn.is_connected = '1'b;
  end netlisten;
 
  netaccept: proc(server, client) returns(fixed bin(31));
@@ -29,14 +29,14 @@
    dcl client like conncb;
    dcl client_fd sock_fd_t;
 
-   client_fd = accept(server._fd);
+   client_fd = accept(server.fd);
    if client_fd < 0 then do;
      signal condition(neterror) set oncode(get_errno());
      return;
    end;
 
-   client._fd = client_fd;
-   client._connected = '1'b;
+   client.fd = client_fd;
+   client.is_connected = '1'b;
  end netaccept;
 
  end net;
