@@ -8,7 +8,7 @@
  %replace backlog_t   by "fixed bin(31)";
  %replace flags_t     by "fixed bin(31)";
  %replace shut_how_t  by "fixed bin(31)";
- %replace buffer_t    by "char(2045)";
+ %replace buffer_t    by "char(2045)";  /* unused, consider 4096 */
 
  %replace CR_LF by "'0D0A'x";
 
@@ -16,7 +16,7 @@
        2 UNSPEC fixed bin(31) init(0),
        2 UNIX   fixed bin(31) init(1),
        2 INET   fixed bin(31) init(2),
-       2 INET6  fixed bin(31) init(10);
+       2 INET6  fixed bin(31) init(10);  /* not yet wired in c bridge, see net_bridge.c:40 */
 
  dcl 1 TYPE static,
        2 STREAM fixed bin(31) init(1),
@@ -29,8 +29,8 @@
 
  dcl 1 conncb aligned based,
        2 _fd        sock_fd_t,
-       2 _ip        char(16),
-       2 _host      char(256) init(''),
+       2 _ip        char(46),  /* ipv6 max 45 + nul */
+       2 _host      char(256) init(''),  /* 255 + nul, rfc 1035 */
        2 _port      port_t init(0),
        2 _connected bit(1) init('0'b),
        2 _family    fixed bin(31),
