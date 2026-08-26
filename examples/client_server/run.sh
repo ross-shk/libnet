@@ -3,11 +3,11 @@
 set -e
 cd "$(dirname "$0")"
 
-# build if missing (uses ../build.sh which auto-docks on macos)
+# build if missing (uses ../../build.sh which auto-docks on macos)
 if [ ! -x ./server_app ] || [ ! -x ./client_app ]; then
   echo "binaries missing, building..."
-  (cd .. && ./build.sh client_server/server_app.pli)
-  (cd .. && ./build.sh client_server/client_app.pli)
+  ../../build.sh examples/client_server/server_app.pli
+  ../../build.sh examples/client_server/client_app.pli
 fi
 
 # run sharing localhost — single container on docker hosts

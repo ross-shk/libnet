@@ -18,8 +18,9 @@ if [ $# -lt 1 ]; then
   echo "  run           - build and run the executable (via docker on macos)"
   echo ""
   echo "Examples:"
-  echo "  $0 use_socket.pli"
-  echo "  $0 run readme_usage.pli"
+  echo "  $0 examples/use_socket.pli"
+  echo "  $0 run examples/readme_usage.pli"
+  echo "  $0 run tests/echo.pli"
   exit 1
 fi
 
@@ -32,9 +33,25 @@ fi
 
 # auto use docker on hosts without plic (macos), fallback to local libnet.a if not installed
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+if [ -f "$SCRIPT_DIR/Makefile" ]; then
+  ROOT="$SCRIPT_DIR"
+else
+  ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+fi
+
+# normalize when called from subdir with bare name (e.g. cd examples && ../build.sh run readme_usage.pli)
+# make SOURCE relative to ROOT for docker workdir /workspace
+if [ ! -f "$ROOT/$SOURCE" ]; then
+  FOUND=$(find "$ROOT" -name "$(basename "$SOURCE")" -type f 2>/dev/null | head -n 1)
+  if [ -n "$FOUND" ]; then
+    SOURCE="${FOUND#$ROOT/}"
+    if [ -z "$2" ]; then
+      OUTPUT="${SOURCE%.pli}"
+    fi
+  fi
+fi
 if ! command -v plic >/dev/null 2>&1; then
-  DOCKER="docker run --rm --platform linux/386 -v $ROOT:/workspace -w /workspace/examples ghcr.io/ross-shk/pli"
+  DOCKER="docker run --rm --platform linux/386 -v $ROOT:/workspace -w /workspace ghcr.io/ross-shk/pli"
   PLIC="$DOCKER plic"
   GCC="$DOCKER gcc"
 else
@@ -75,7 +92,7 @@ if [ "$MODE" = "run" ]; then
   echo "=== Running $OUTPUT ==="
   echo ""
   if ! command -v plic >/dev/null 2>&1; then
-    docker run --rm --platform linux/386 -v "$ROOT:/workspace" -w /workspace/examples ghcr.io/ross-shk/pli "./$OUTPUT"
+    docker run --rm --platform linux/386 -v "$ROOT:/workspace" -w /workspace ghcr.io/ross-shk/pli "./$OUTPUT"
   else
     "./$OUTPUT"
   fi

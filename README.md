@@ -41,10 +41,10 @@ main: procedure options(main);
      goto done;
    end;
 
-   request =
-       'GET / HTTP/1.1'    || CR_LF ||
-       'Host: ' || host    || CR_LF ||
-       'Connection: close' || CR_LF || CR_LF;
+    request =
+        'GET / HTTP/1.1'    || LINE_END ||
+        'Host: ' || host    || LINE_END ||
+        'Connection: close' || LINE_END || LINE_END;
    
    call netdial(conn, host, AF.INET);  /* host is auto-resolved */
 
@@ -61,12 +61,10 @@ main: procedure options(main);
 
 ## Run an Example
 
-You can build and run code in `./examples` using the provided `build.sh` which either uses the Docker image or natively installed PL/I compiler if available:
+You can build and run any single PL/I program using the `build.sh` at the project root (uses Docker or a natively installed compiler):
 
 ```sh
-cd examples
-
-./build.sh run readme_usage.pli
+./build.sh run examples/readme_usage.pli
 ```
 
 On a system with the Iron Spring PL/I or a similar compiler installed directly, you can compile and link using the following commands (make sure to build and install this library first, see [Build & Install](#build--install) above):
