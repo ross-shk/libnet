@@ -10,7 +10,7 @@
  %replace shut_how_t  by "fixed bin(31)";
  %replace buffer_t    by "char(2045)";
 
- %replace LINE_END by "'0D0A'x";
+ %replace CR_LF by "'0D0A'x";
 
  dcl 1 AF static,
        2 UNSPEC fixed bin(31) init(0),

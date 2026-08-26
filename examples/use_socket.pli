@@ -21,10 +21,10 @@
    host = '127.0.0.1';  /* or host = 'localhost'; */
    port = 8080;
    request =
-       'GET / HTTP/1.1' || LINE_END ||
-       'Host: ' || trim(host) || ":" || trim(port) || LINE_END ||
-       'Connection: close' || LINE_END || LINE_END;
-   display("REQUEST: " || LINE_END || trim(char(request)));
+       'GET / HTTP/1.1' || CR_LF ||
+       'Host: ' || trim(host) || ":" || trim(port) || CR_LF ||
+       'Connection: close' || CR_LF || CR_LF;
+   display("REQUEST: " || CR_LF || trim(char(request)));
    
    call netnew(conn, AF.INET, TYPE.STREAM, 0);
    call netconnect(conn, host, port);  /* connect to host:port */

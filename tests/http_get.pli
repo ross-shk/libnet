@@ -14,9 +14,9 @@
    end;
 
    /* build minimal http request */
-   request = 'GET / HTTP/1.1' || LINE_END ||
-             'Host: 127.0.0.1:18080' || LINE_END ||
-             'Connection: close' || LINE_END || LINE_END;
+   request = 'GET / HTTP/1.1' || CR_LF ||
+             'Host: 127.0.0.1:18080' || CR_LF ||
+             'Connection: close' || CR_LF || CR_LF;
 
    /* dial server via url (host:port) */
    call netdial(conn, '127.0.0.1:18080', AF.INET);

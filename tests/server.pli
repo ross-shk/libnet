@@ -43,9 +43,9 @@
 
    /* serve http for GET, echo otherwise to cover both use cases */
    if index(msg, 'GET') = 1 then do;
-     reply = 'HTTP/1.1 200 OK' || LINE_END ||
-             'Content-Length: 27' || LINE_END ||
-             'Connection: close' || LINE_END || LINE_END ||
+     reply = 'HTTP/1.1 200 OK' || CR_LF ||
+             'Content-Length: 27' || CR_LF ||
+             'Connection: close' || CR_LF || CR_LF ||
              'Hello from PL/I test server';
      bytes = netwrite(client, reply);
      display('server sent http ' || char(bytes));

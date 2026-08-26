@@ -28,7 +28,7 @@
    end;
 
    host = '127.0.0.1';
-   request = 'Hello from PL/I client!' || LINE_END;
+   request = 'Hello from PL/I client!' || CR_LF;
 
    display('Connecting to ' || trim(host) || ':' || port);
 
