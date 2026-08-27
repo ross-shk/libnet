@@ -30,16 +30,16 @@
        2 ANY       fixed bin(31) init(0),
        2 BROADCAST fixed bin(31) init(-1);
 
-  /* conncb is aligned based - use 'dcl conn like conncb' */
-  /* like loses initial, based requires implicit pointer */
-  dcl 1 conncb aligned based,
-        2 fd        sock_fd_t,
-        2 ip_addr        char(46),  /* ipv6 max 45 + nul */
-        2 host_name      char(256) init(''),  /* 255 + nul, rfc 1035 */
-        2 port      port_t init(0),
-        2 is_connected bit(1) init('0'b),
-        2 addr_family    fixed bin(31),
-        2 sock_type      fixed bin(31),
-        2 flags      fixed bin(31),
-        2 ipv4_addr   fixed bin(31);
+ /* conncb is aligned based - use 'dcl conn like conncb' */ 
+ /* like loses initial, based requires implicit pointer */
+ dcl 1 conncb aligned based,
+       2 fd        sock_fd_t,
+       2 ip_addr        char(46),  /* ipv6 max 45 + nul */
+       2 host_name      char(256) init(''),  /* 255 + nul, rfc 1035 */
+       2 port      port_t init(0),
+       2 is_connected bit(1) init('0'b),
+       2 addr_family    fixed bin(31),
+       2 sock_type      fixed bin(31),
+       2 flags      fixed bin(31),
+       2 ipv4_addr   fixed bin(31);
  
