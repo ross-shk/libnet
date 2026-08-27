@@ -11,9 +11,9 @@
    dcl conn like conncb;
    dcl (family, socktype, flag) fixed bin(31);
 
-   conn.fd = socket(family, socktype, flag);
+   conn.fd = c_socket(family, socktype, flag);
    if conn.fd < 0 then do;
-     signal condition(neterror) set oncode(get_errno());
+     signal condition(neterror) set oncode(c_get_errno());
      return;
    end;
    conn.addr_family = family;
@@ -31,9 +31,9 @@
      dcl c_ip char(257);
 
      c_ip = trim(substr(ip, 1, length(ip))) || '00'x;
-     status = connect(addr(c_ip), port, conn.fd, conn.addr_family);
+     status = c_connect(addr(c_ip), port, conn.fd, conn.addr_family);
      if status < 0 then do;
-       signal condition(neterror) set oncode(get_errno());
+       signal condition(neterror) set oncode(c_get_errno());
        return;
      end;
    end;
@@ -91,11 +91,11 @@
    begin;
      dcl slice char(length(request));
      slice = request;
-     bytes_sent = send(conn.fd, addr(slice), length(request), flags);
+     bytes_sent = c_send(conn.fd, addr(slice), length(request), flags);
    end;
 
    if bytes_sent < 0 then do;
-     signal condition(neterror) set oncode(get_errno());
+     signal condition(neterror) set oncode(c_get_errno());
    end;
    return(bytes_sent);
  end netsend;
@@ -107,10 +107,10 @@
 
    dcl bytes_received fixed bin(31) init(0);
 
-   bytes_received = receive(conn.fd, addr(response), 
+   bytes_received = c_receive(conn.fd, addr(response), 
       length(response), flags);
    if bytes_received < 0 then do;
-     signal condition(neterror) set oncode(get_errno());
+     signal condition(neterror) set oncode(c_get_errno());
      return(bytes_received);
    end;
    if bytes_received > 0 then 
@@ -131,7 +131,7 @@
      slice = buffer;
 
      do while(bytes_written < length(buffer));
-      n = write(conn.fd, addr(slice) + bytes_written,
+      n = c_write(conn.fd, addr(slice) + bytes_written,
                     length(buffer) - bytes_written);
         if n <= 0 then leave;
         bytes_written = bytes_written + n;
@@ -139,7 +139,7 @@
     end;
 
     if bytes_written < 0 then do;
-      signal condition(neterror) set oncode(get_errno());
+      signal condition(neterror) set oncode(c_get_errno());
       return(bytes_written);
     end;
    return(bytes_written);
@@ -153,10 +153,10 @@
    dcl slice char(length(buffer));
 
    slice = buffer;
-   n = write(conn.fd, addr(slice), length(buffer));
+   n = c_write(conn.fd, addr(slice), length(buffer));
 
    if n < 0 then do;
-     signal condition(neterror) set oncode(get_errno());
+     signal condition(neterror) set oncode(c_get_errno());
      return(n);
    end;
    return(n);
@@ -167,10 +167,10 @@
    dcl buffer char(*);
    dcl bytes_read size_t;
 
-   bytes_read = read(conn.fd, addr(buffer), length(buffer));
+   bytes_read = c_read(conn.fd, addr(buffer), length(buffer));
 
    if bytes_read < 0 then do;
-     signal condition(neterror) set oncode(get_errno());
+     signal condition(neterror) set oncode(c_get_errno());
      return(bytes_read);
    end;
    if bytes_read > 0 then 
@@ -190,10 +190,10 @@
      dcl n size_t;
 
      do while(total_read < length(buffer));
-       n = read(conn.fd, buf_ptr + total_read,
+       n = c_read(conn.fd, buf_ptr + total_read,
                 length(buffer) - total_read);
        if n < 0 then do;
-         signal condition(neterror) set oncode(get_errno());
+         signal condition(neterror) set oncode(c_get_errno());
          return(n);
        end;
        if n = 0 then leave;
@@ -212,9 +212,9 @@
    dcl err_code fixed bin(31) init(0);
    
    if conn.fd >= 0 then do;
-     err_code = close(conn.fd);
+     err_code = c_close(conn.fd);
      if err_code < 0 then do;
-       signal condition(neterror) set oncode(get_errno());
+       signal condition(neterror) set oncode(c_get_errno());
        return(err_code);
      end;
      conn.is_connected = '0'b;
@@ -227,9 +227,9 @@
    dcl how shut_how_t;
    dcl err fixed bin(31);
 
-   err = shutdown(conn.fd, how);
+   err = c_shutdown(conn.fd, how);
    if err < 0 then do;
-     signal condition(neterror) set oncode(get_errno());
+     signal condition(neterror) set oncode(c_get_errno());
      return(err);
    end;
    return(err);
@@ -246,11 +246,11 @@
 
    begin;
      c_host = substr(hostname, 1, length(hostname)) || '00'x;
-     rc = resolve_hostname(addr(c_host), conn.addr_family, 
+     rc = c_resolve_hostname(addr(c_host), conn.addr_family, 
        addr(ip_buf), length(ip_buf));
 
      if rc < 0 then do;
-       signal condition(neterror) set oncode(get_errno());
+       signal condition(neterror) set oncode(c_get_errno());
        return;
      end;
    end;

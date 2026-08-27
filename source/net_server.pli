@@ -10,13 +10,13 @@
    dcl port    port_t;
    dcl backlog backlog_t;
 
-    if bind(conn.fd, port, conn.addr_family, INADDR.ANY) < 0 then do;
-      signal condition(neterror) set oncode(get_errno());
+    if c_bind(conn.fd, port, conn.addr_family, INADDR.ANY) < 0 then do;
+      signal condition(neterror) set oncode(c_get_errno());
       return;
     end;
 
-    if listen(conn.fd, backlog) < 0 then do;
-      signal condition(neterror) set oncode(get_errno());
+    if c_listen(conn.fd, backlog) < 0 then do;
+      signal condition(neterror) set oncode(c_get_errno());
       return;
     end;
 
@@ -29,9 +29,9 @@
    dcl client like conncb;
    dcl client_fd sock_fd_t;
 
-   client_fd = accept(server.fd);
+   client_fd = c_accept(server.fd);
    if client_fd < 0 then do;
-     signal condition(neterror) set oncode(get_errno());
+     signal condition(neterror) set oncode(c_get_errno());
      return;
    end;
 

@@ -2,14 +2,14 @@
 
  %include type_defs;
 
- dcl socket entry (
+ dcl c_socket entry (
    fixed bin(31),  /* family */
    fixed bin(31),  /* type */
    fixed bin(31)   /* flag */
  ) returns(fixed bin(31))  /* socket descriptor */
    options(linkage(system)) external('socket');
 
- dcl resolve_hostname entry (
+ dcl c_resolve_hostname entry (
    pointer,        /* hostname (null-terminated) */
    fixed bin(31),  /* address family */
    pointer,        /* output IP string buffer */
@@ -17,27 +17,27 @@
  ) returns(fixed bin(31))  /* 0 on success, -1 on error */
    options(linkage(system)) external('resolve_hostname');
 
- dcl get_errno entry () returns(fixed bin(31))
+ dcl c_get_errno entry () returns(fixed bin(31))
     options(linkage(system)) external('get_errno');
 
- dcl shutdown entry (
+ dcl c_shutdown entry (
    sock_fd_t,   /* socket descriptor */
    shut_how_t     /* 0=read, 1=write, 2=both */
  ) returns(fixed bin(31))  /* status */
    options(linkage(system)) external('shutdown');
 
- dcl accept entry (
+ dcl c_accept entry (
    sock_fd_t  /* server socket descriptor */
  ) returns(sock_fd_t)  /* client socket descriptor */
    options(linkage(system)) external('default_accept');
 
- dcl listen entry (
+ dcl c_listen entry (
     sock_fd_t,  /* socket descriptor */
     backlog_t     /* backlog */
  ) returns(fixed bin(31))  /* status */
    options(linkage(system)) external('listen');
 
- dcl bind entry (
+ dcl c_bind entry (
    sock_fd_t,    /* socket descriptor */
    port_t,         /* port */
    fixed bin(31),  /* family */
@@ -45,7 +45,7 @@
  ) returns (fixed bin(31))  /* status */
    options(linkage(system)) external('bind_to_port');
 
- dcl connect entry (
+ dcl c_connect entry (
    pointer,      /* host */
    port_t,       /* port */
    sock_fd_t,       /* socket file descriptor */
@@ -53,7 +53,7 @@
  ) returns(fixed bin(31))  /* socket descriptor */
    options(linkage(system)) external('connect_to_host');
 
- dcl send entry (
+ dcl c_send entry (
    sock_fd_t,  /* socket descriptor */
    pointer,      /* request */
    size_t,       /* length */
@@ -61,7 +61,7 @@
  ) returns(size_t)  /* num of bytes sent */
    options(linkage(system)) external('send');
 
- dcl receive entry (
+ dcl c_receive entry (
    sock_fd_t,  /* socket descriptor */
    pointer,      /* buffer */
    size_t,       /* length */
@@ -69,21 +69,21 @@
  ) returns(size_t)  /* num of bytes received  */
    options(linkage(system)) external('recv');
 
- dcl read entry (
+ dcl c_read entry (
    sock_fd_t,  /* socket descriptor */
    pointer,      /* buffer */
    size_t        /* length */
  ) returns(size_t)  /* num of bytes read */
    options(linkage(system)) external('read');
 
- dcl write entry (
+ dcl c_write entry (
    sock_fd_t,  /* socket descriptor */
    pointer,      /* buffer */
    size_t        /* length */
  ) returns(size_t)  /* num of bytes written */
    options(linkage(system)) external('write');
 
- dcl close entry (
+ dcl c_close entry (
    sock_fd_t  /* socket descriptor */
  ) returns(fixed bin(31))  /* error code */
    options(linkage(system)) external('close');
