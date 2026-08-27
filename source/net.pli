@@ -1,13 +1,13 @@
  /* Copyright 2026 Ross Shkurat - Apache-2.0, see LICENSE */
 
- net: package exports(netconnect, netdial, netsend, netreceive,
-   netread, netreadall, netwrite, netwriteall, netclose, netshutdown, 
-   netnew, netresolve);
+ net: package exports(net_connect, net_dial, net_send, net_recv,
+   net_read, net_read_all, net_write, net_write_all, net_close, net_shutdown, 
+   net_open, net_resolve);
 
  %include net_bridge;
  %include net_errors;
 
- netnew: proc(conn, family, socktype, flag);
+ net_open: proc(conn, family, socktype, flag);
    dcl conn like conncb;
    dcl (family, socktype, flag) fixed bin(31);
 
@@ -19,9 +19,9 @@
    conn.addr_family = family;
    conn.sock_type = socktype;
    conn.flags = flag;
- end netnew;
+ end net_open;
 
- netconnect: proc(conn, ip, port);
+ net_connect: proc(conn, ip, port);
    dcl conn like conncb;
    dcl ip char(*) varying;
    dcl port port_t;
@@ -41,9 +41,9 @@
    conn.host_name = ip;
    conn.port = port;
    conn.is_connected = '1'b;
- end netconnect;
+ end net_connect;
 
- netdial: proc(conn, url, family);
+ net_dial: proc(conn, url, family);
    dcl conn like conncb;
    dcl url char(*) varying;
    dcl family fixed bin(31);
@@ -52,13 +52,13 @@
    dcl port port_t;
    call split_url;
 
-   call netnew(conn, family, SOCK_TYPE.STREAM, 0);
+   call net_open(conn, family, SOCK_TYPE.STREAM, 0);
    if is_hostname then do;
-     call netresolve(conn, host);
-     call netconnect(conn, conn.ip_addr, port);
+     call net_resolve(conn, host);
+     call net_connect(conn, conn.ip_addr, port);
    end;
    else
-     call netconnect(conn, host, port);
+     call net_connect(conn, host, port);
 
    split_url: proc;
      dcl pos fixed bin(31);
@@ -79,9 +79,9 @@
         'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz');
       return( verify(reverse(host), letters) > 1 );
     end;
- end netdial;
+ end net_dial;
 
- netsend: proc(conn, request, flags) returns(size_t);
+ net_send: proc(conn, request, flags) returns(size_t);
    dcl conn like conncb;
    dcl request char(*) varying;
    dcl flags flags_t;
@@ -98,9 +98,9 @@
      signal condition(neterror) set oncode(c_get_errno());
    end;
    return(bytes_sent);
- end netsend;
+ end net_send;
 
- netreceive: proc(conn, response, flags) returns(size_t);
+ net_recv: proc(conn, response, flags) returns(size_t);
    dcl conn like conncb;
    dcl response char(*);   
    dcl flags flags_t;
@@ -116,9 +116,9 @@
    if bytes_received > 0 then 
       response = substr(response, 1, bytes_received);
    return(bytes_received);
- end netreceive; 
+ end net_recv; 
 
- netwriteall: proc(conn, buffer) returns(size_t);
+ net_write_all: proc(conn, buffer) returns(size_t);
    dcl conn like conncb;
    dcl buffer char(*) varying;
 
@@ -143,9 +143,9 @@
       return(bytes_written);
     end;
    return(bytes_written);
- end netwriteall;
+ end net_write_all;
 
- netwrite: proc(conn, buffer) returns(size_t);
+ net_write: proc(conn, buffer) returns(size_t);
    dcl conn like conncb;
    dcl buffer char(*) varying;
 
@@ -160,9 +160,9 @@
      return(n);
    end;
    return(n);
- end netwrite;
+ end net_write;
 
- netread: proc(conn, buffer) returns(size_t);
+ net_read: proc(conn, buffer) returns(size_t);
    dcl conn like conncb;
    dcl buffer char(*);
    dcl bytes_read size_t;
@@ -176,9 +176,9 @@
    if bytes_read > 0 then 
       buffer = substr(buffer, 1, bytes_read);
    return(bytes_read);
- end netread;
+ end net_read;
 
- netreadall: proc(conn, buffer) returns(size_t);
+ net_read_all: proc(conn, buffer) returns(size_t);
    dcl conn like conncb;
    dcl buffer char(*);
 
@@ -204,9 +204,9 @@
    if total_read > 0 then
      buffer = substr(buffer, 1, total_read);
    return(total_read);
- end netreadall;
+ end net_read_all;
 
- netclose: proc(conn) returns(fixed bin(31));
+ net_close: proc(conn) returns(fixed bin(31));
    dcl conn like conncb;
 
    dcl err_code fixed bin(31) init(0);
@@ -220,9 +220,9 @@
      conn.is_connected = '0'b;
    end;
    return(err_code);
- end netclose;
+ end net_close;
 
- netshutdown: proc(conn, how) returns(fixed bin(31));
+ net_shutdown: proc(conn, how) returns(fixed bin(31));
    dcl conn like conncb;
    dcl how shut_how_t;
    dcl err fixed bin(31);
@@ -233,9 +233,9 @@
      return(err);
    end;
    return(err);
- end netshutdown;
+ end net_shutdown;
 
- netresolve: proc(conn, hostname);
+ net_resolve: proc(conn, hostname);
    dcl conn like conncb;
    dcl hostname char(*) varying;
 
@@ -260,6 +260,6 @@
    
    conn.host_name = trim(substr(hostname, 1, length(hostname)));
    conn.ip_addr = substr(ip_buf, 1, null_pos - 1);
- end netresolve;
+ end net_resolve;
 
  end net;

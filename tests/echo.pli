@@ -14,14 +14,14 @@
    end;
 
    /* create socket and connect to test server */
-   call netnew(conn, AF.INET, SOCK_TYPE.STREAM, 0);
-   call netconnect(conn, '127.0.0.1', 18080);
+   call net_open(conn, AF.INET, SOCK_TYPE.STREAM, 0);
+   call net_connect(conn, '127.0.0.1', 18080);
 
    /* send payload - errors signal neterror */
-   bytes = netwrite(conn, msg);
+   bytes = net_write(conn, msg);
 
    /* receive echo - 0 means eof, not signalled */
-   bytes = netread(conn, resp);
+   bytes = net_read(conn, resp);
    if bytes <= 0 then do;
      display('echo no reply');
      stop;
@@ -36,5 +36,5 @@
    end;
 
    display('echo ok');
-   call netclose(conn);
+   call net_close(conn);
  end main;

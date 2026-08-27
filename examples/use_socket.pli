@@ -1,6 +1,6 @@
  /* Copyright 2026 Ross Shkurat - Apache-2.0, see LICENSE 
     
-     Manual socket example using netnew/netconnect and netwrite/netread 
+     Manual socket example using net_open/net_connect and net_write/net_read 
      to fetch a simple HTTP response. Shows explicit host/port handling
      and basic display.              
 
@@ -26,17 +26,17 @@
        'Connection: close' || CR_LF || CR_LF;
    display("REQUEST: " || CR_LF || trim(char(request)));
    
-   call netnew(conn, AF.INET, SOCK_TYPE.STREAM, 0);
-   call netconnect(conn, host, port);  /* connect to host:port */
+   call net_open(conn, AF.INET, SOCK_TYPE.STREAM, 0);
+   call net_connect(conn, host, port);  /* connect to host:port */
 
    display("       CONNECTED...");
 
-   bytes_sent = netwrite(conn, request);  /* send request */
+   bytes_sent = net_write(conn, request);  /* send request */
    display(' >> bytes sent ' || trim(char(bytes_sent)));
 
-   bytes_received = netread(conn, response);  /* read response */
+   bytes_received = net_read(conn, response);  /* read response */
    display(' >> bytes received ' || bytes_received);
    display(' >> response ' || substr(response, 1, bytes_received));
 
-   call netclose(conn); 
+   call net_close(conn); 
  end main;

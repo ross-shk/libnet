@@ -1,8 +1,8 @@
   /* Copyright 2026 Ross Shkurat - Apache-2.0, see LICENSE 
     
-     Echo server example using netnew/netlisten/netaccept.
+     Echo server example using net_open/net_listen/net_accept.
      Reads one client message and echoes it back.
-     Shows netlisten, netaccept, netread, netwrite and
+     Shows net_listen, net_accept, net_read, net_write and
      attention/neterror handling.
 
      Run with:
@@ -22,8 +22,8 @@
    dcl bytes     size_t;
 
    on attention begin;  /* allow harness to kill server cleanly */
-     call netclose(server);
-     call netclose(client);
+     call net_close(server);
+     call net_close(client);
      goto done;
    end;
 
@@ -33,22 +33,22 @@
    end;
     
    /* create socket */
-   call netnew(server, AF.INET, SOCK_TYPE.STREAM, 0);
+   call net_open(server, AF.INET, SOCK_TYPE.STREAM, 0);
 
    /* bind and listen */
-   call netlisten(server, port, backlog);
+   call net_listen(server, port, backlog);
 
    display('Server listening on port ' || port);
 
    /* accept one client */
-   call netaccept(server, client);
+   call net_accept(server, client);
 
    display('Client connected');
 
    /* read what the client sent */
-   bytes = netread(client, buffer);
+   bytes = net_read(client, buffer);
    if bytes < 0 then do;
-     display('netread failed');
+     display('net_read failed');
      stop;
    end;
 
@@ -57,17 +57,17 @@
      display('Received: ' || message);
 
      /* echo it back */
-     bytes = netwrite(client, message);
+     bytes = net_write(client, message);
      if bytes < 0 then do;
-       display('netwrite failed');
+       display('net_write failed');
        stop;
      end;
 
      display('Echoed back');
    end;
 
-   call netclose(client);
-   call netclose(server);
+   call net_close(client);
+   call net_close(server);
 
  done:
    display('Server shut down');

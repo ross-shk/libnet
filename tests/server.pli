@@ -23,16 +23,16 @@
    end;
 
    /* create and bind listening socket */
-   call netnew(server, AF.INET, SOCK_TYPE.STREAM, 0);
-   call netlisten(server, port, backlog);
+   call net_open(server, AF.INET, SOCK_TYPE.STREAM, 0);
+   call net_listen(server, port, backlog);
    display('server listening on ' || trim(char(port)));
 
    /* accept one client for this test iteration */
-   call netaccept(server, client);
+   call net_accept(server, client);
    display('client connected');
 
    /* read client request */
-   bytes = netread(client, buffer);
+   bytes = net_read(client, buffer);
    if bytes <= 0 then do;
      display('server no data');
      goto done_client;
@@ -47,19 +47,19 @@
              'Content-Length: 27' || CR_LF ||
              'Connection: close' || CR_LF || CR_LF ||
              'Hello from PL/I test server';
-     bytes = netwrite(client, reply);
+     bytes = net_write(client, reply);
      display('server sent http ' || char(bytes));
    end;
    else do;
-     bytes = netwrite(client, msg);
+     bytes = net_write(client, msg);
      display('server echoed ' || char(bytes));
    end;
 
  done_client:
    /* close client connection */
-   call netclose(client);
+   call net_close(client);
  done:
    /* close listening socket and exit */
-   call netclose(server);
+   call net_close(server);
    display('server done');
  end main;

@@ -1,11 +1,11 @@
  /* Copyright 2026 Ross Shkurat - Apache-2.0, see LICENSE */
 
- net: package exports(netlisten, netaccept);
+ net: package exports(net_listen, net_accept);
 
  %include net_bridge;
  %include net_errors;
 
- netlisten: proc(conn, port, backlog);
+ net_listen: proc(conn, port, backlog);
    dcl conn    like conncb;
    dcl port    port_t;
    dcl backlog backlog_t;
@@ -22,9 +22,9 @@
 
     conn.port = port;
     conn.is_connected = '1'b;
- end netlisten;
+ end net_listen;
 
- netaccept: proc(server, client) returns(fixed bin(31));
+ net_accept: proc(server, client) returns(fixed bin(31));
    dcl server like conncb;
    dcl client like conncb;
    dcl client_fd sock_fd_t;
@@ -37,6 +37,6 @@
 
    client.fd = client_fd;
    client.is_connected = '1'b;
- end netaccept;
+ end net_accept;
 
  end net;

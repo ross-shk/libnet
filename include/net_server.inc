@@ -1,12 +1,12 @@
 /* Copyright 2026 Ross Shkurat - Apache-2.0, see LICENSE */
 
- dcl netlisten entry (
+ dcl net_listen entry (
    like conncb,
    port_t,
    backlog_t
  );
 
- dcl netaccept entry (
+ dcl net_accept entry (
    like conncb,
    like conncb
  );

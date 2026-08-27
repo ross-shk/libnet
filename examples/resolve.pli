@@ -1,7 +1,7 @@
   /* Copyright 2026 Ross Shkurat - Apache-2.0, see LICENSE 
     
-     Minimal example of hostname resolution using netresolve.
-     Shows netnew, netresolve and basic error handling.
+     Minimal example of hostname resolution using net_resolve.
+     Shows net_open, net_resolve and basic error handling.
 
      Run with:
        ./build.sh run resolve.pli
@@ -18,8 +18,8 @@
       stop;
     end;
 
-    call netnew(conn, AF.INET, SOCK_TYPE.STREAM, 0);
-    call netresolve(conn, hostname);  /* hostname is auto-resolved */
+    call net_open(conn, AF.INET, SOCK_TYPE.STREAM, 0);
+    call net_resolve(conn, hostname);  /* hostname is auto-resolved */
 
     display('Resolved ' || trim(conn.host_name)
             || ' to ' || trim(conn.ip_addr));

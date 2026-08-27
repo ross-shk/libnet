@@ -16,8 +16,8 @@
    end;
 
    /* resolve hostname to ip */
-   call netnew(conn, AF.INET, SOCK_TYPE.STREAM, 0);
-   call netresolve(conn, hostname);
+   call net_open(conn, AF.INET, SOCK_TYPE.STREAM, 0);
+   call net_resolve(conn, hostname);
 
    if length(trim(conn.ip_addr)) = 0 then do;
      display('resolve empty ip');
@@ -31,17 +31,17 @@
    end;
 
    display('resolve ok ' || trim(conn.ip_addr));
-   call netclose(conn);
+   call net_close(conn);
 
    /* dial via hostname url and fetch http */
-   call netdial(conn2, 'localhost:18080', AF.INET);
+   call net_dial(conn2, 'localhost:18080', AF.INET);
 
    request = 'GET / HTTP/1.1' || CR_LF ||
              'Host: localhost' || CR_LF ||
              'Connection: close' || CR_LF || CR_LF;
 
-   bytes = netwrite(conn2, request);
-   bytes = netread(conn2, response);
+   bytes = net_write(conn2, request);
+   bytes = net_read(conn2, response);
    if bytes <= 0 then do;
      display('dial read 0');
      stop;
@@ -54,5 +54,5 @@
    end;
 
    display('dial ok');
-   call netclose(conn2);
+   call net_close(conn2);
  end main;

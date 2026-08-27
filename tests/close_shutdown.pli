@@ -20,26 +20,26 @@
    end;
 
    /* connect and exchange data */
-   call netnew(conn, AF.INET, SOCK_TYPE.STREAM, 0);
-   call netconnect(conn, '127.0.0.1', 18080);
+   call net_open(conn, AF.INET, SOCK_TYPE.STREAM, 0);
+   call net_connect(conn, '127.0.0.1', 18080);
 
    /* send - errors signal neterror */
-   bytes = netwrite(conn, msg);
+   bytes = net_write(conn, msg);
 
    /* half-close write side - errors signal */
-   bytes = netshutdown(conn, 1); /* 1=write */
+   bytes = net_shutdown(conn, 1); /* 1=write */
 
    /* read echo before full close - 0 is eof, not signalled */
-   bytes = netread(conn, resp);
+   bytes = net_read(conn, resp);
 
    /* close - errors signal */
-   bytes = netclose(conn);
+   bytes = net_close(conn);
    display('shutdown_close ok');
 
    /* expect refused connect on unused port */
    expect_error = '1'b;
-   call netnew(conn2, AF.INET, SOCK_TYPE.STREAM, 0);
-   call netconnect(conn2, '127.0.0.1', 18099);
+   call net_open(conn2, AF.INET, SOCK_TYPE.STREAM, 0);
+   call net_connect(conn2, '127.0.0.1', 18099);
    display('should have failed');
    stop;
 
