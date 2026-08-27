@@ -14,7 +14,7 @@
    end;
 
    /* create socket and connect to test server */
-   call netnew(conn, AF.INET, TYPE.STREAM, 0);
+   call netnew(conn, AF.INET, SOCK_TYPE.STREAM, 0);
    call netconnect(conn, '127.0.0.1', 18080);
 
    /* send payload - errors signal neterror */

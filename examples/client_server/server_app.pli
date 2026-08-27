@@ -33,7 +33,7 @@
    end;
     
    /* create socket */
-   call netnew(server, AF.INET, TYPE.STREAM, 0);
+   call netnew(server, AF.INET, SOCK_TYPE.STREAM, 0);
 
    /* bind and listen */
    call netlisten(server, port, backlog);

@@ -18,7 +18,7 @@
       stop;
     end;
 
-    call netnew(conn, AF.INET, TYPE.STREAM, 0);
+    call netnew(conn, AF.INET, SOCK_TYPE.STREAM, 0);
     call netresolve(conn, hostname);  /* hostname is auto-resolved */
 
     display('Resolved ' || trim(conn.host_name)

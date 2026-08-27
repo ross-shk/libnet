@@ -7,17 +7,17 @@
  %include net_bridge;
  %include net_errors;
 
- netnew: proc(conn, family, type, flag);
+ netnew: proc(conn, family, socktype, flag);
    dcl conn like conncb;
-   dcl (family, type, flag) fixed bin(31);
+   dcl (family, socktype, flag) fixed bin(31);
 
-   conn.fd = socket(family, type, flag);
+   conn.fd = socket(family, socktype, flag);
    if conn.fd < 0 then do;
      signal condition(neterror) set oncode(get_errno());
      return;
    end;
    conn.addr_family = family;
-   conn.sock_type = type;
+   conn.sock_type = socktype;
    conn.flags = flag;
  end netnew;
 
@@ -52,7 +52,7 @@
    dcl port port_t;
    call split_url;
 
-   call netnew(conn, family, TYPE.STREAM, 0);
+   call netnew(conn, family, SOCK_TYPE.STREAM, 0);
    if is_hostname then do;
      call netresolve(conn, host);
      call netconnect(conn, conn.ip_addr, port);

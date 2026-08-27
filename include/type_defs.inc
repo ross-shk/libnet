@@ -19,7 +19,7 @@
        2 INET6  fixed bin(31) init(10);
                  /* not wired, see net_bridge.c */
 
- dcl 1 TYPE static,
+ dcl 1 SOCK_TYPE static,
        2 STREAM fixed bin(31) init(1),
        2 DGRAM  fixed bin(31) init(2),
        2 RAW    fixed bin(31) init(3);

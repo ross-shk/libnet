@@ -32,7 +32,7 @@
 
    display('Connecting to ' || trim(host) || ':' || port);
 
-   call netnew(conn, AF.INET, TYPE.STREAM, 0);
+   call netnew(conn, AF.INET, SOCK_TYPE.STREAM, 0);
    call netconnect(conn, host, port);  /* connect to server */
 
    display('Connected');

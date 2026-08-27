@@ -20,7 +20,7 @@
    end;
 
    /* connect and exchange data */
-   call netnew(conn, AF.INET, TYPE.STREAM, 0);
+   call netnew(conn, AF.INET, SOCK_TYPE.STREAM, 0);
    call netconnect(conn, '127.0.0.1', 18080);
 
    /* send - errors signal neterror */
@@ -38,7 +38,7 @@
 
    /* expect refused connect on unused port */
    expect_error = '1'b;
-   call netnew(conn2, AF.INET, TYPE.STREAM, 0);
+   call netnew(conn2, AF.INET, SOCK_TYPE.STREAM, 0);
    call netconnect(conn2, '127.0.0.1', 18099);
    display('should have failed');
    stop;

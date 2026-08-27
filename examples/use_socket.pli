@@ -26,7 +26,7 @@
        'Connection: close' || CR_LF || CR_LF;
    display("REQUEST: " || CR_LF || trim(char(request)));
    
-   call netnew(conn, AF.INET, TYPE.STREAM, 0);
+   call netnew(conn, AF.INET, SOCK_TYPE.STREAM, 0);
    call netconnect(conn, host, port);  /* connect to host:port */
 
    display("       CONNECTED...");

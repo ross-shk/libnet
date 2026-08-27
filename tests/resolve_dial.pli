@@ -16,7 +16,7 @@
    end;
 
    /* resolve hostname to ip */
-   call netnew(conn, AF.INET, TYPE.STREAM, 0);
+   call netnew(conn, AF.INET, SOCK_TYPE.STREAM, 0);
    call netresolve(conn, hostname);
 
    if length(trim(conn.ip_addr)) = 0 then do;

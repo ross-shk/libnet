@@ -23,7 +23,7 @@
    end;
 
    /* create and bind listening socket */
-   call netnew(server, AF.INET, TYPE.STREAM, 0);
+   call netnew(server, AF.INET, SOCK_TYPE.STREAM, 0);
    call netlisten(server, port, backlog);
    display('server listening on ' || trim(char(port)));
 
