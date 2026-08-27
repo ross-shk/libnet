@@ -2,7 +2,7 @@
 
  net: package exports(net_listen, net_accept);
 
- %include net_bridge;
+ %include c_bridge;
  %include net_errors;
 
  net_listen: proc(conn, port, backlog);

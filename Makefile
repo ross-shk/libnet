@@ -34,7 +34,7 @@ else
 endif
 
 INC        = -i include
-OBJS       = net_bridge.o net.o net_server.o
+OBJS       = c_bridge.o net.o net_server.o
 DIST_INC   = dist/net.inc
 DIST_PC    = dist/net.pc
 TEST_SRCS  = $(filter-out tests/server.pli,$(wildcard tests/*.pli))
@@ -44,13 +44,13 @@ TEST_SERVER = tests/server
 
 all: libnet.a $(DIST_INC) $(DIST_PC)
 
-net_bridge.o: source/net_bridge.c
+c_bridge.o: source/c_bridge.c
 	$(RUN) $(CC) $(CFLAGS) -c $< -o $@
 
-net.o: source/net.pli include/net_bridge.inc include/net_errors.inc include/type_defs.inc
+net.o: source/net.pli include/c_bridge.inc include/net_errors.inc include/type_defs.inc
 	$(RUN) $(PLIC) $(PLIFLAGS) $< $(INC) -o $@
 
-net_server.o: source/net_server.pli include/net_bridge.inc include/net_errors.inc include/type_defs.inc
+net_server.o: source/net_server.pli include/c_bridge.inc include/net_errors.inc include/type_defs.inc
 	$(RUN) $(PLIC) $(PLIFLAGS) $< $(INC) -o $@
 
 libnet.a: $(OBJS)
@@ -63,7 +63,7 @@ $(TEST_SERVER): tests/server.pli libnet.a
 	if [ $$rc -ne 0 ] && [ $$rc -ne 4 ]; then exit $$rc; fi; \
 	$(RUN) gcc $(LDFLAGS) -o $@ $@.o libnet.a $(LIBS) $(ALT_DIR)/fhs.o $(ALT_DIR)/ghs.o
 
-$(DIST_INC): include/type_defs.inc include/net_bridge.inc include/net_errors.inc include/net_base.inc include/net_server.inc
+$(DIST_INC): include/type_defs.inc include/c_bridge.inc include/net_errors.inc include/net_base.inc include/net_server.inc
 	mkdir -p dist
 	> $@
 	for f in $^; do \

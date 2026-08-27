@@ -4,7 +4,7 @@
    net_read, net_read_all, net_write, net_write_all, net_close, net_shutdown, 
    net_open, net_resolve);
 
- %include net_bridge;
+ %include c_bridge;
  %include net_errors;
 
  net_open: proc(conn, family, socktype, flag);

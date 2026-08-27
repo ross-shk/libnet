@@ -19,7 +19,7 @@
        2 UNIX   fixed bin(31) init(1),
        2 INET   fixed bin(31) init(2),
        2 INET6  fixed bin(31) init(10);
-                 /* not wired, see net_bridge.c */
+                 /* not wired, see c_bridge.c */
 
  dcl 1 SOCK_TYPE static,
        2 STREAM fixed bin(31) init(1),
