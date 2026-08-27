@@ -2,15 +2,17 @@
 
  %process options(extended_replace);
 
- %replace sock_fd_t by "fixed bin(31)";
- %replace size_t by "fixed bin(31)";
- %replace port_t by "fixed bin(31)";
- %replace backlog_t by "fixed bin(31)";
+ %replace sock_fd_t by "fixed bin(31)";  /* signed, -1 error */
+ %replace size_t by "fixed bin(31)";  
+ %replace port_t by "fixed bin(15)";  
+ %replace backlog_t by "fixed bin(15)";  /* small, was 31 */
  %replace flags_t by "fixed bin(31)";
  %replace shut_how_t by "fixed bin(31)";
  %replace buffer_t by "char(2045)";  /* unused, consider 4096 */
 
  %replace CR_LF by "'0D0A'x";
+ %replace MAX_HOST_LEN by "256";  /* rfc 1035 */
+ %replace MAX_IP_LEN by "46";  /* ipv6 max 45 + nul */
 
  dcl 1 AF static,
        2 UNSPEC fixed bin(31) init(0),
