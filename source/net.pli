@@ -28,11 +28,14 @@
    dcl conn like conncb;
    dcl (family, socktype, flag) fixed bin(31);
 
+   /* create socket */
    conn.fd = c_socket(family, socktype, flag);
+   /* handle socket error */
    if conn.fd < 0 then do;
      signal condition(neterror) set oncode(c_get_errno());
      return;
    end;
+   /* init conncb fields */
    conn.addr_family = family;
    conn.sock_type = socktype;
    conn.flags = flag;
@@ -49,16 +52,20 @@
      dcl status fixed bin(31);
      dcl c_ip char(257);
 
+     /* apply connect timeout */
      call apply_timeout(conn, 0);
 
+     /* build c string and connect */
      c_ip = trim(substr(ip, 1, length(ip))) || '00'x;
      status = c_connect(addr(c_ip), port, conn.fd, conn.addr_family);
+     /* handle connect error */
      if status < 0 then do;
        signal condition(neterror) set oncode(c_get_errno());
        return;
      end;
    end;
-   
+    
+   /* update conncb on success */
    conn.host_name = ip;
    conn.port = port;
    conn.is_connected = '1'b;
@@ -71,8 +78,10 @@
    
    dcl host char(256) varying;
    dcl port port_t;
+   /* parse url into host and port */
    call split_url;
 
+   /* open socket and connect based on host type */
    call net_open(conn, family, SOCK_TYPE.STREAM, 0);
    if is_hostname then do;
      call net_resolve(conn, host);
@@ -83,8 +92,10 @@
 
    split_url: proc;
      dcl pos fixed bin(31);
+     /* find colon separator */
      pos = index(url, ':');
 
+     /* handle missing colon */
      if pos = 0 then do;
        signal condition(neterror) set oncode(61);
        return;
@@ -98,6 +109,7 @@
   is_hostname: proc returns(bit(1));
       dcl letters char(52) init(
         'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz');
+      /* check if host contains letters */
       return( verify(reverse(host), letters) > 1 );
     end;
  end net_dial;
@@ -109,14 +121,18 @@
 
    dcl bytes_sent fixed bin(31) init(0);
 
+   /* apply write timeout */
    call apply_timeout(conn, 0);
 
+   /* send via c layer */
    begin;
      dcl slice char(length(request));
+     /* prepare slice and send */
      slice = request;
      bytes_sent = c_send(conn.fd, addr(slice), length(request), flags);
    end;
 
+   /* handle send error */
    if bytes_sent < 0 then do;
      signal condition(neterror) set oncode(c_get_errno());
    end;
@@ -130,14 +146,18 @@
 
    dcl bytes_received fixed bin(31) init(0);
 
+   /* apply read timeout */
    call apply_timeout(conn, 1);
 
+   /* receive via c layer */
    bytes_received = c_receive(conn.fd, addr(response), 
       length(response), flags);
+   /* handle receive error */
    if bytes_received < 0 then do;
      signal condition(neterror) set oncode(c_get_errno());
      return(bytes_received);
    end;
+   /* truncate buffer to actual bytes */
    if bytes_received > 0 then 
       response = substr(response, 1, bytes_received);
    return(bytes_received);
@@ -149,22 +169,27 @@
 
    dcl bytes_written fixed bin(31) init(0);
 
+   /* apply write timeout */
    call apply_timeout(conn, 0);
 
+   /* loop until all bytes written */
    begin;
      dcl n size_t;
      dcl slice char(length(buffer));
 
+     /* prepare slice and loop */
      slice = buffer;
 
      do while(bytes_written < length(buffer));
       n = c_write(conn.fd, addr(slice) + bytes_written,
                     length(buffer) - bytes_written);
+        /* handle short write */
         if n <= 0 then leave;
         bytes_written = bytes_written + n;
       end;
     end;
 
+   /* handle write error */
     if bytes_written < 0 then do;
       signal condition(neterror) set oncode(c_get_errno());
       return(bytes_written);
@@ -179,11 +204,14 @@
    dcl n size_t;
    dcl slice char(length(buffer));
 
+   /* apply write timeout */
    call apply_timeout(conn, 0);
 
+   /* single write */
    slice = buffer;
    n = c_write(conn.fd, addr(slice), length(buffer));
 
+   /* handle write error */
    if n < 0 then do;
      signal condition(neterror) set oncode(c_get_errno());
      return(n);
@@ -196,14 +224,18 @@
    dcl buffer char(*);
    dcl bytes_read size_t;
 
+   /* apply read timeout */
    call apply_timeout(conn, 1);
 
+   /* single read */
    bytes_read = c_read(conn.fd, addr(buffer), length(buffer));
 
+   /* handle read error */
    if bytes_read < 0 then do;
      signal condition(neterror) set oncode(c_get_errno());
      return(bytes_read);
    end;
+   /* truncate buffer to actual bytes */
    if bytes_read > 0 then 
       buffer = substr(buffer, 1, bytes_read);
    return(bytes_read);
@@ -215,8 +247,10 @@
 
    dcl total_read size_t init(0);
 
+   /* apply read timeout */
    call apply_timeout(conn, 1);
 
+   /* loop until buffer full or eof */
    begin;
      dcl buf_ptr ptr;
      buf_ptr = addr(buffer);
@@ -225,15 +259,18 @@
      do while(total_read < length(buffer));
        n = c_read(conn.fd, buf_ptr + total_read,
                 length(buffer) - total_read);
+       /* handle read error */
        if n < 0 then do;
          signal condition(neterror) set oncode(c_get_errno());
          return(n);
        end;
+       /* handle eof */
        if n = 0 then leave;
        total_read = total_read + n;
      end;
    end;
 
+   /* truncate buffer to actual bytes */
    if total_read > 0 then
      buffer = substr(buffer, 1, total_read);
    return(total_read);
@@ -244,6 +281,7 @@
 
    dcl err_code fixed bin(31) init(0);
    
+   /* close if valid fd */
    if conn.fd >= 0 then do;
      err_code = c_close(conn.fd);
      if err_code < 0 then do;
@@ -260,6 +298,7 @@
    dcl how shut_how_t;
    dcl err fixed bin(31);
 
+   /* shutdown socket */
    err = c_shutdown(conn.fd, how);
    if err < 0 then do;
      signal condition(neterror) set oncode(c_get_errno());
@@ -277,6 +316,7 @@
    dcl rc fixed bin(31);
    dcl null_pos fixed bin(31);
 
+   /* resolve hostname to ip */
    begin;
      c_host = substr(hostname, 1, length(hostname)) || '00'x;
      rc = c_resolve_hostname(addr(c_host), conn.addr_family, 
@@ -288,6 +328,7 @@
      end;
    end;
 
+   /* extract ip from c buffer */
    null_pos = index(ip_buf, '00'x);
    if null_pos = 0 then null_pos = length(ip_buf) + 1;
    

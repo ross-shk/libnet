@@ -16,11 +16,13 @@ int default_accept(int server_fd) {
   socklen_t client_len = sizeof(client_addr);
   int client_fd;
 
+  /* accept with EINTR retry */
   do {
     client_fd = accept(server_fd, (struct sockaddr *)&client_addr, 
       &client_len);
   } while (client_fd < 0 && errno == EINTR);
 
+  /* check result */
   if (client_fd < 0) return -1;
   return client_fd;
 }
@@ -28,11 +30,13 @@ int default_accept(int server_fd) {
 int bind_to_port(int socket_fd, int port, int af, int inaddr) {
   struct sockaddr_in addr;
 
+  /* build sockaddr */
   memset(&addr, 0, sizeof(addr));
   addr.sin_family = af;
   addr.sin_addr.s_addr = inaddr;   
   addr.sin_port = htons(port);         
 
+  /* bind */
   return bind(socket_fd, (struct sockaddr *)&addr, sizeof(addr));
 }
 
@@ -42,12 +46,15 @@ int resolve_hostname(char *hostname, int family,
   struct addrinfo *result;
   int ret;
 
+  /* setup hints */
   hints.ai_family = family;
 
+  /* resolve */
   ret = getaddrinfo(hostname, NULL, &hints, &result);
   if (ret != 0)
       return -1;
 
+  /* convert to string */
   if (result->ai_family == AF_INET) {
     struct sockaddr_in *a = (struct sockaddr_in *)result->ai_addr;
     inet_ntop(AF_INET, &a->sin_addr, out_ip, out_len);
@@ -65,11 +72,13 @@ int resolve_hostname(char *hostname, int family,
 }
 
 int get_errno(void) {
+  /* return errno */
   return errno;
 }
 
 int connect_to_host(char *host, int port, int socket_fd, int af) {
   struct sockaddr_in addr = {0};
+  /* build sockaddr and connect */
   addr.sin_family = af;
   addr.sin_port = htons(port);
   inet_pton(af, host, &addr.sin_addr);
@@ -79,6 +88,7 @@ int connect_to_host(char *host, int port, int socket_fd, int af) {
 
 int c_set_timeout(int fd, int is_read, int timeout_ms) {
   struct timeval tv;
+  /* convert ms to timeval */
   if (timeout_ms <= 0) {
     tv.tv_sec = 0;
     tv.tv_usec = 0;
@@ -86,6 +96,7 @@ int c_set_timeout(int fd, int is_read, int timeout_ms) {
     tv.tv_sec = timeout_ms / 1000;
     tv.tv_usec = (timeout_ms % 1000) * 1000;
   }
+  /* set socket timeout */
   int opt = is_read ? SO_RCVTIMEO : SO_SNDTIMEO;
   return setsockopt(fd, SOL_SOCKET, opt, &tv, sizeof(tv));
 }

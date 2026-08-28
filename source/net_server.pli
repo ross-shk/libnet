@@ -27,16 +27,19 @@
    dcl port    port_t;
    dcl backlog backlog_t;
 
+    /* bind socket */
     if c_bind(conn.fd, port, conn.addr_family, INADDR.ANY) < 0 then do;
       signal condition(neterror) set oncode(c_get_errno());
       return;
     end;
 
+    /* listen */
     if c_listen(conn.fd, backlog) < 0 then do;
       signal condition(neterror) set oncode(c_get_errno());
       return;
     end;
 
+    /* update conncb */
     conn.port = port;
     conn.is_connected = '1'b;
  end net_listen;
@@ -46,14 +49,17 @@
    dcl client like conncb;
    dcl client_fd sock_fd_t;
 
+   /* apply accept timeout */
    call apply_timeout(server, 1);
 
+   /* accept client */
    client_fd = c_accept(server.fd);
    if client_fd < 0 then do;
      signal condition(neterror) set oncode(c_get_errno());
      return;
    end;
 
+   /* init client conncb */
    client.fd = client_fd;
    client.is_connected = '1'b;
    client.read_timeout = 0;
