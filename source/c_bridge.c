@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <sys/time.h>
 
 int default_accept(int server_fd) {
   struct sockaddr_in client_addr;
@@ -74,4 +75,17 @@ int connect_to_host(char *host, int port, int socket_fd, int af) {
   inet_pton(af, host, &addr.sin_addr);
 
   return connect(socket_fd, (struct sockaddr*)&addr, sizeof(addr)) ;
+}
+
+int c_set_timeout(int fd, int is_read, int timeout_ms) {
+  struct timeval tv;
+  if (timeout_ms <= 0) {
+    tv.tv_sec = 0;
+    tv.tv_usec = 0;
+  } else {
+    tv.tv_sec = timeout_ms / 1000;
+    tv.tv_usec = (timeout_ms % 1000) * 1000;
+  }
+  int opt = is_read ? SO_RCVTIMEO : SO_SNDTIMEO;
+  return setsockopt(fd, SOL_SOCKET, opt, &tv, sizeof(tv));
 }

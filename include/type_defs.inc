@@ -41,5 +41,7 @@
        2 addr_family    fixed bin(31),
        2 sock_type      fixed bin(31),
        2 flags      fixed bin(31),
-       2 ipv4_addr   fixed bin(31);
+       2 ipv4_addr   fixed bin(31),
+       2 read_timeout  fixed bin(31) init(0),  /* ms, 0 infinite */
+       2 write_timeout fixed bin(31) init(0);  /* ms, 0 infinite */
  

@@ -7,6 +7,23 @@
  %include c_bridge;
  %include net_errors;
 
+ /* package-level helper: apply read/write timeout from conncb */
+ apply_timeout: proc(conn, is_read);
+   dcl conn like conncb;
+   dcl is_read fixed bin(31);
+   dcl rc fixed bin(31);
+   if is_read then do;
+     if conn.read_timeout ^= 0 then
+       rc = c_set_timeout(conn.fd, 1, conn.read_timeout);
+     else rc = c_set_timeout(conn.fd, 1, 0);
+   end;
+   else do;
+     if conn.write_timeout ^= 0 then
+       rc = c_set_timeout(conn.fd, 0, conn.write_timeout);
+     else rc = c_set_timeout(conn.fd, 0, 0);
+   end;
+ end apply_timeout;
+
  net_open: proc(conn, family, socktype, flag);
    dcl conn like conncb;
    dcl (family, socktype, flag) fixed bin(31);
@@ -19,6 +36,8 @@
    conn.addr_family = family;
    conn.sock_type = socktype;
    conn.flags = flag;
+   conn.read_timeout = 0;
+   conn.write_timeout = 0;
  end net_open;
 
  net_connect: proc(conn, ip, port);
@@ -29,6 +48,8 @@
    begin;
      dcl status fixed bin(31);
      dcl c_ip char(257);
+
+     call apply_timeout(conn, 0);
 
      c_ip = trim(substr(ip, 1, length(ip))) || '00'x;
      status = c_connect(addr(c_ip), port, conn.fd, conn.addr_family);
@@ -88,6 +109,8 @@
 
    dcl bytes_sent fixed bin(31) init(0);
 
+   call apply_timeout(conn, 0);
+
    begin;
      dcl slice char(length(request));
      slice = request;
@@ -107,6 +130,8 @@
 
    dcl bytes_received fixed bin(31) init(0);
 
+   call apply_timeout(conn, 1);
+
    bytes_received = c_receive(conn.fd, addr(response), 
       length(response), flags);
    if bytes_received < 0 then do;
@@ -123,6 +148,8 @@
    dcl buffer char(*) varying;
 
    dcl bytes_written fixed bin(31) init(0);
+
+   call apply_timeout(conn, 0);
 
    begin;
      dcl n size_t;
@@ -152,6 +179,8 @@
    dcl n size_t;
    dcl slice char(length(buffer));
 
+   call apply_timeout(conn, 0);
+
    slice = buffer;
    n = c_write(conn.fd, addr(slice), length(buffer));
 
@@ -166,6 +195,8 @@
    dcl conn like conncb;
    dcl buffer char(*);
    dcl bytes_read size_t;
+
+   call apply_timeout(conn, 1);
 
    bytes_read = c_read(conn.fd, addr(buffer), length(buffer));
 
@@ -183,6 +214,8 @@
    dcl buffer char(*);
 
    dcl total_read size_t init(0);
+
+   call apply_timeout(conn, 1);
 
    begin;
      dcl buf_ptr ptr;

@@ -41,6 +41,12 @@
    msg = substr(buffer, 1, bytes);
    display('server received ' || msg);
 
+   /* timeout test endpoint: delay 2s for /delay */
+   if index(msg, '/delay') > 0 then do;
+     display('server delaying 2000ms for timeout test');
+     delay(2000);
+   end;
+
    /* serve http for GET, echo otherwise to cover both use cases */
    if index(msg, 'GET') = 1 then do;
      reply = 'HTTP/1.1 200 OK' || CR_LF ||

@@ -87,3 +87,10 @@
    sock_fd_t  /* socket descriptor */
  ) returns(fixed bin(31))  /* error code */
    options(linkage(system)) external('close');
+
+ dcl c_set_timeout entry (
+   sock_fd_t,    /* socket descriptor */
+   fixed bin(31),  /* is_read: 1=read, 0=write */
+   fixed bin(31)   /* timeout ms, 0 infinite */
+ ) returns(fixed bin(31))
+   options(linkage(system)) external('c_set_timeout');

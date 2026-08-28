@@ -1,0 +1,65 @@
+ main: proc options(main);
+ %include net;
+
+   /* e2e: read timeout via direct conncb field */
+   dcl conn like conncb;
+   dcl request char(512) varying;
+   dcl response char(4096);
+   dcl bytes size_t;
+   dcl expect_timeout bit(1) init('0'b);
+
+   /* handle expected timeout vs unexpected */
+   on condition(neterror) begin;
+     if expect_timeout then do;
+       /* EAGAIN 11 or ETIMEDOUT 110 both mean timeout on linux */
+       if oncode() = 11 | oncode() = 110 | oncode() = 35 then do;
+         display('timeout ok code ' || oncode());
+         goto timeout_ok;
+       end;
+       display('timeout wrong code ' || oncode());
+       goto timeout_ok;
+     end;
+     display('timeout unexpected ' || oncode());
+     stop;
+   end;
+
+   /* set read timeout directly on conncb */
+   call net_open(conn, AF.INET, SOCK_TYPE.STREAM, 0);
+   conn.read_timeout = 500;  /* ms */
+   display('read_timeout set 500');
+
+   call net_connect(conn, '127.0.0.1', 18080);
+   request = 'GET /delay HTTP/1.1' || CR_LF ||
+             'Host: 127.0.0.1' || CR_LF || CR_LF;
+   bytes = net_write(conn, request);
+
+   /* expect timeout on read - server delays 2000ms */
+   expect_timeout = '1'b;
+   bytes = net_read(conn, response);
+   display('should have timed out');
+   stop;
+
+ timeout_ok:
+   expect_timeout = '0'b;
+   call net_close(conn);
+
+   /* verify without timeout still works */
+   call net_open(conn, AF.INET, SOCK_TYPE.STREAM, 0);
+   conn.read_timeout = 0;  /* infinite */
+   call net_connect(conn, '127.0.0.1', 18080);
+   request = 'GET / HTTP/1.1' || CR_LF ||
+             'Host: 127.0.0.1' || CR_LF || CR_LF;
+   bytes = net_write(conn, request);
+   bytes = net_read(conn, response);
+   if bytes <= 0 then do;
+     display('second read failed');
+     stop;
+   end;
+   if index(response, '200 OK') = 0 then do;
+     display('no 200 on second try');
+     stop;
+   end;
+
+   display('timeout test ok with and without timeout');
+   call net_close(conn);
+ end main;
