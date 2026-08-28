@@ -23,17 +23,38 @@
      stop;
    end;
 
-   /* set read timeout directly on conncb */
-   call net_open(conn, AF.INET, SOCK_TYPE.STREAM, 0);
-   conn.read_timeout = 500;  /* ms */
-   display('read_timeout set 500');
+   /* helper: open, set timeout, connect */
+   open_and_connect: proc(timeout);
+     dcl timeout fixed bin(31);
+     call net_open(conn, AF.INET, SOCK_TYPE.STREAM, 0);
+     conn.read_timeout = timeout;
+     display('read_timeout set ' || timeout);
+     call net_connect(conn, '127.0.0.1', 18080);
+   end open_and_connect;
 
-   call net_connect(conn, '127.0.0.1', 18080);
-   request = 'GET /delay HTTP/1.1' || CR_LF ||
-             'Host: 127.0.0.1' || CR_LF || CR_LF;
-   bytes = net_write(conn, request);
+   /* helper: build get request for path and send */
+   send_get: proc(path);
+     dcl path char(*) varying;
+     request = 'GET ' || path || ' HTTP/1.1' || CR_LF ||
+               'Host: 127.0.0.1' || CR_LF || CR_LF;
+     bytes = net_write(conn, request);
+   end send_get;
 
-   /* expect timeout on read - server delays 2000ms */
+   /* helper: verify response contains 200 */
+   check_200: proc;
+     if bytes <= 0 then do;
+       display('read failed');
+       stop;
+     end;
+     if index(response, '200 OK') = 0 then do;
+       display('no 200');
+       stop;
+     end;
+   end check_200;
+
+   /* first run - expect timeout on /delay */
+   call open_and_connect(500);
+   call send_get('/delay');
    expect_timeout = '1'b;
    bytes = net_read(conn, response);
    display('should have timed out');
@@ -43,23 +64,15 @@
    expect_timeout = '0'b;
    call net_close(conn);
 
-   /* verify without timeout still works */
-   call net_open(conn, AF.INET, SOCK_TYPE.STREAM, 0);
-   conn.read_timeout = 0;  /* infinite */
-   call net_connect(conn, '127.0.0.1', 18080);
-   request = 'GET / HTTP/1.1' || CR_LF ||
-             'Host: 127.0.0.1' || CR_LF || CR_LF;
-   bytes = net_write(conn, request);
+   /* second run - verify without timeout still works */
+   call open_and_connect(0);
+   call send_get('/');
    bytes = net_read(conn, response);
-   if bytes <= 0 then do;
-     display('second read failed');
-     stop;
-   end;
-   if index(response, '200 OK') = 0 then do;
-     display('no 200 on second try');
-     stop;
-   end;
+   call check_200;
 
    display('timeout test ok with and without timeout');
    call net_close(conn);
+   goto done;
+
+ done:
  end main;
