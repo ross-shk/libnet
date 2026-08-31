@@ -11,12 +11,12 @@
    dcl is_read fixed bin(31);
    dcl rc fixed bin(31);
    if is_read then do;
-     if conn.read_timeout ^= 0 then
+     if conn.read_timeout ¬= 0 then
        rc = c_set_timeout(conn.fd, 1, conn.read_timeout);
      else rc = c_set_timeout(conn.fd, 1, 0);
    end;
    else do;
-     if conn.write_timeout ^= 0 then
+     if conn.write_timeout ¬= 0 then
        rc = c_set_timeout(conn.fd, 0, conn.write_timeout);
      else rc = c_set_timeout(conn.fd, 0, 0);
    end;

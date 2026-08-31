@@ -25,7 +25,7 @@
    end;
 
    /* localhost should resolve to loopback */
-   if trim(conn.ip_addr) ^= '127.0.0.1' then do;
+   if trim(conn.ip_addr) ¬= '127.0.0.1' then do;
      display('resolve got ' || trim(conn.ip_addr));
      display(' expected 127.0.0.1');
    end;

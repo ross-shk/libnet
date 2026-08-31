@@ -28,7 +28,7 @@
    end;
 
    /* verify echo matches sent data */
-   if substr(resp, 1, bytes) ^= msg then do;
+   if substr(resp, 1, bytes) ¬= msg then do;
      display('echo mismatch');
      display('got: ' || substr(resp, 1, bytes));
      display('exp: ' || msg);
