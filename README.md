@@ -23,7 +23,7 @@ Or just use `libnet.a` available in the project root after build directly.
 
 ## Usage
 
-See `examples/readme_usage.pli`:
+See `examples/readme_usage.pli` and [API docs](docs/api.md):
 
 ```pli
 main: procedure options(main);
@@ -46,16 +46,16 @@ main: procedure options(main);
         'Host: ' || host    || CR_LF ||
         'Connection: close' || CR_LF || CR_LF;
    
-   call netdial(conn, host, AF.INET);  /* host is auto-resolved */
+   call net_dial(conn, host, AF.INET);  /* host is auto-resolved */
 
-   call netwriteall(conn, request); 
-   bytes = netreadall(conn, response);
+   call net_write_all(conn, request); 
+   bytes = net_read_all(conn, response);
 
    /* only reached unless there's a network error */
    display('Response ' || substr(response, 1, bytes));
- 
+   
  done:
-   call netclose(conn); 
+   call net_close(conn); 
  end;
 ```
 
