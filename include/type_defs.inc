@@ -34,44 +34,6 @@
        2 ANY       fixed bin(31) init(0),
        2 BROADCAST fixed bin(31) init(-1);
 
- dcl 1 PF static,
-       2 UNSPEC   fixed bin(31) init(0),
-       2 UNIX     fixed bin(31) init(1),
-       2 INET     fixed bin(31) init(2),
-       2 INET6    fixed bin(31) init(10);
-
- dcl 1 IPPROTO static,
-       2 IP       fixed bin(31) init(0),
-       2 TCP      fixed bin(31) init(6),
-       2 UDP      fixed bin(31) init(17),
-       2 IPV6     fixed bin(31) init(41),
-       2 ICMPV6   fixed bin(31) init(58);
-
- dcl 1 SOL static,
-       2 SOCKET   fixed bin(31) init(1),
-       2 IP       fixed bin(31) init(0),
-       2 TCP      fixed bin(31) init(6);
-
- dcl 1 SO static,
-       2 REUSEADDR fixed bin(31) init(2),
-       2 REUSEPORT fixed bin(31) init(15),
-       2 KEEPALIVE fixed bin(31) init(9),
-       2 SNDBUF    fixed bin(31) init(7),
-       2 RCVBUF    fixed bin(31) init(8),
-       2 SNDTIMEO  fixed bin(31) init(21),
-       2 RCVTIMEO  fixed bin(31) init(20),
-       2 ERROR     fixed bin(31) init(4),
-       2 TYPE      fixed bin(31) init(3),
-       2 LINGER    fixed bin(31) init(13);
-
- dcl 1 TCP static,
-       2 NODELAY   fixed bin(31) init(1),
-       2 MAXSEG    fixed bin(31) init(2),
-       2 CORK      fixed bin(31) init(3),
-       2 KEEPIDLE  fixed bin(31) init(4),
-       2 KEEPINTVL fixed bin(31) init(5),
-       2 KEEPCNT   fixed bin(31) init(6);
-
  dcl 1 MSG_FLAG static,
        2 PEEK     fixed bin(31) init(2),
        2 WAITALL  fixed bin(31) init(256),
@@ -84,17 +46,6 @@
        2 RDWR   fixed bin(31) init(2);
 
  dcl SOMAXCONN fixed bin(31) static init(4096);
-
- dcl 1 AI static,
-       2 PASSIVE    fixed bin(31) init(1),
-       2 CANONNAME  fixed bin(31) init(2),
-       2 NUMERICHOST fixed bin(31) init(4),
-       2 ADDRCONFIG fixed bin(31) init(32),
-       2 V4MAPPED   fixed bin(31) init(8);
-
- dcl 1 NI static,
-       2 NUMERICHOST fixed bin(31) init(1),
-       2 MAXHOST     fixed bin(31) init(1025);
 
  /* conncb is aligned based - use 'dcl conn like conncb' */ 
  /* like loses initial, based requires implicit pointer */
