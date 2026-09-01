@@ -1,0 +1,44 @@
+ main: proc options(main);
+ %include net;
+
+   /* e2e: send/recv with flags */
+   dcl conn like conncb;
+   dcl msg char(256) varying init('Hello send/recv!');
+   dcl resp char(4096);
+   dcl bytes size_t;
+
+   /* abort on any network error */
+   on condition(neterror) begin;
+     display('send_recv failed code ' || oncode());
+     stop;
+   end;
+
+   /* create socket and connect */
+   call net_open(conn, AF.INET, SOCK_TYPE.STREAM, 0);
+   call net_connect(conn, '127.0.0.1', 18080);
+
+   /* send with flags=0 */
+   bytes = net_send(conn, msg, 0);
+   if bytes <= 0 then do;
+     display('send failed');
+     stop;
+   end;
+
+   /* recv with flags=0 - 0 is eof */
+   bytes = net_recv(conn, resp, 0);
+   if bytes <= 0 then do;
+     display('recv no reply');
+     stop;
+   end;
+
+   /* verify echo matches */
+   if substr(resp, 1, bytes) ¬= msg then do;
+     display('send_recv mismatch');
+     display('got: ' || substr(resp, 1, bytes));
+     display('exp: ' || msg);
+     stop;
+   end;
+
+   display('send_recv ok');
+   call net_close(conn);
+ end main;
