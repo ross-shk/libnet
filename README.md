@@ -116,6 +116,22 @@ dockerize gcc -m32 -no-pie -z muldefs -o readme_usage readme_usage.o ../libnet.a
 dockerize ./readme_usage
 ```
 
+## Testing
+
+`make test` builds `tests/server.pli` (echo/http on `18080`, `/delay` sleeps `2000` via `delay`) and runs 7 e2e clients against it:
+
+- `tests/http_get` — `net_dial` + HTTP
+- `tests/echo` — `net_open`/`net_connect` + `net_write`/`net_read` echo
+- `tests/send_recv` — `net_send`/`net_recv` with `flags=0` echo
+- `tests/resolve_dial` — `net_resolve` + `net_dial`
+- `tests/close_shutdown` — `net_close`/`net_shutdown` (`SHUT.RDWR`)
+- `tests/timeout` — direct `conn.read_timeout` assignment, expects `neterror 11`/`110` on `/delay`
+- `tests/ephemeral` — `net_listen` with `port 0` verifies `server.port` assigned via `c_getsockname`, plus peer check
+
+Run a single test: `./build.sh run tests/echo.pli` (server must be running — `make test` handles this automatically).
+
+Diagnostics: `*.lst` `grep -E '\(ERR|WRN\)'`, `rc 0` ok `4` warn `8` error — `Makefile` tolerates `4`.
+
 ## License
 
 Apache 2.0
