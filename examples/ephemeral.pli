@@ -1,0 +1,36 @@
+ /* Copyright 2026 Ross Shkurat - Apache-2.0, see LICENSE 
+    
+     Ephemeral port and peer address example.
+     Shows net_listen with port 0 (kernel picks free port)
+     and net_accept filling client.ip_addr/port via getpeername.
+
+     Run with:
+       ./build.sh run ephemeral.pli
+ */
+
+ main: proc options(main);
+ %include net;
+
+   dcl server like conncb;
+   dcl port port_t init(0);
+   dcl backlog backlog_t init(5);
+
+   on condition(neterror) begin;  /* handle low-level network errors */
+     display('ephemeral error code =' || oncode());
+     stop;
+   end;
+
+   /* create and bind to ephemeral port */
+   call net_open(server, AF.INET, SOCK_TYPE.STREAM, 0);
+   call net_listen(server, 0, 5);
+
+   /* kernel assigned port is now in server.port */
+   display('Listening on ephemeral port ' || server.port);
+
+   /* accept would fill peer - see tests/ephemeral for full demo */
+   display('Peer will be available after net_accept');
+   display('Example: client.ip_addr/port filled via getpeername');
+
+   call net_close(server);
+   display('ephemeral done - try nc 127.0.0.1 ' || server.port);
+ end main;

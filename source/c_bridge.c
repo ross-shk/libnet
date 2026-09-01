@@ -100,3 +100,23 @@ int c_set_timeout(int fd, int is_read, int timeout_ms) {
   int opt = is_read ? SO_RCVTIMEO : SO_SNDTIMEO;
   return setsockopt(fd, SOL_SOCKET, opt, &tv, sizeof(tv));
 }
+
+int c_getsockname(int fd, char *out_ip, int out_len, int *out_port) {
+  struct sockaddr_in addr;
+  socklen_t len = sizeof(addr);
+  /* get local addr */
+  if (getsockname(fd, (struct sockaddr*)&addr, &len) < 0) return -1;
+  inet_ntop(AF_INET, &addr.sin_addr, out_ip, out_len);
+  *out_port = ntohs(addr.sin_port);
+  return 0;
+}
+
+int c_getpeername(int fd, char *out_ip, int out_len, int *out_port) {
+  struct sockaddr_in addr;
+  socklen_t len = sizeof(addr);
+  /* get peer addr */
+  if (getpeername(fd, (struct sockaddr*)&addr, &len) < 0) return -1;
+  inet_ntop(AF_INET, &addr.sin_addr, out_ip, out_len);
+  *out_port = ntohs(addr.sin_port);
+  return 0;
+}

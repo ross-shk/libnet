@@ -94,3 +94,19 @@
    fixed bin(31)   /* timeout ms, 0 infinite */
  ) returns(fixed bin(31))
    options(linkage(system)) external('c_set_timeout');
+
+ dcl c_getsockname entry (
+   sock_fd_t,    /* socket descriptor */
+   pointer,      /* out ip buffer */
+   fixed bin(31),  /* out len */
+   pointer       /* out port int* */
+ ) returns(fixed bin(31))
+   options(linkage(system)) external('c_getsockname');
+
+ dcl c_getpeername entry (
+   sock_fd_t,    /* socket descriptor */
+   pointer,      /* out ip buffer */
+   fixed bin(31),  /* out len */
+   pointer       /* out port int* */
+ ) returns(fixed bin(31))
+   options(linkage(system)) external('c_getpeername');

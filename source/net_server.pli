@@ -27,21 +27,31 @@
    dcl port    port_t;
    dcl backlog backlog_t;
 
-    /* bind socket */
-    if c_bind(conn.fd, port, conn.addr_family, INADDR.ANY) < 0 then do;
-      signal condition(neterror) set oncode(c_get_errno());
-      return;
-    end;
+   dcl ip_buf char(64) init((64)'00'x);
+   dcl port_out fixed bin(31);
 
-    /* listen */
-    if c_listen(conn.fd, backlog) < 0 then do;
-      signal condition(neterror) set oncode(c_get_errno());
-      return;
-    end;
+   /* bind socket */
+   if c_bind(conn.fd, port, conn.addr_family, INADDR.ANY) < 0 then do;
+     signal condition(neterror) set oncode(c_get_errno());
+     return;
+   end;
 
-    /* update conncb */
-    conn.port = port;
-    conn.is_connected = '1'b;
+   /* listen */
+   if c_listen(conn.fd, backlog) < 0 then do;
+     signal condition(neterror) set oncode(c_get_errno());
+     return;
+   end;
+
+   /* update conncb */
+   conn.port = port;
+   conn.is_connected = '1'b;
+   
+   /* handle ephemeral port 0 */
+   if port = 0 then do;
+     ip_buf = (64)'00'x;
+     if c_getsockname(conn.fd, addr(ip_buf), 64, addr(port_out)) = 0 then
+       conn.port = port_out;
+   end;
  end net_listen;
 
  net_accept: proc(server, client) returns(fixed bin(31));
@@ -64,6 +74,23 @@
    client.is_connected = '1'b;
    client.read_timeout = 0;
    client.write_timeout = 0;
+
+   /* fill peer addr */
+   begin;
+     dcl ip_buf char(64) init((64)'00'x);
+     dcl port_out fixed bin(31);
+     dcl null_pos fixed bin(31);
+     if c_getpeername(client.fd, addr(ip_buf), 64, addr(port_out)) = 0 then do;
+       null_pos = index(ip_buf, '00'x);
+       if null_pos = 0 then null_pos = length(ip_buf) + 1;
+       client.ip_addr = substr(ip_buf, 1, null_pos - 1);
+       
+       client.port = port_out;
+       client.host_name = client.ip_addr;
+       client.addr_family = server.addr_family;
+       client.sock_type = server.sock_type;
+     end;
+   end;
  end net_accept;
 
  end net;

@@ -4,7 +4,7 @@
 
  %replace sock_fd_t by "fixed bin(31)";  /* signed, -1 error */
  %replace size_t by "fixed bin(31)";  
- %replace port_t by "fixed bin(15)";  
+ %replace port_t by "fixed bin(31)";  
  %replace backlog_t by "fixed bin(15)";  /* small, was 31 */
  %replace flags_t by "fixed bin(31)";
  %replace shut_how_t by "fixed bin(31)";
