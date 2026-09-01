@@ -47,10 +47,10 @@ all: libnet.a $(DIST_INC) $(DIST_PC)
 c_bridge.o: source/c_bridge.c
 	$(RUN) $(CC) $(CFLAGS) -c $< -o $@
 
-net.o: source/net.pli include/c_bridge.inc include/net_errors.inc include/type_defs.inc
+net.o: source/net.pli include/c_bridge.inc include/net_errors.inc include/net_helpers.inc include/type_defs.inc
 	$(RUN) $(PLIC) $(PLIFLAGS) $< $(INC) -o $@
 
-net_server.o: source/net_server.pli include/c_bridge.inc include/net_errors.inc include/type_defs.inc
+net_server.o: source/net_server.pli include/c_bridge.inc include/net_errors.inc include/net_helpers.inc include/type_defs.inc
 	$(RUN) $(PLIC) $(PLIFLAGS) $< $(INC) -o $@
 
 libnet.a: $(OBJS)
