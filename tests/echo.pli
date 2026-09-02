@@ -18,11 +18,11 @@
    call net_connect(conn, '127.0.0.1', 18080);
 
    /* send payload - errors signal neterror */
-   bytes = net_write(conn, msg);
+   call net_write(conn, msg);
 
    /* receive echo - 0 means eof, not signalled */
    bytes = net_read(conn, resp);
-   if bytes <= 0 then do;
+   if bytes = 0 then do;
      display('echo no reply');
      stop;
    end;

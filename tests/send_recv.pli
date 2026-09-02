@@ -19,14 +19,14 @@
 
    /* send with flags=0 */
    bytes = net_send(conn, msg, 0);
-   if bytes <= 0 then do;
+   if bytes = 0 then do;
      display('send failed');
      stop;
    end;
 
    /* recv with flags=0 - 0 is eof */
    bytes = net_recv(conn, resp, 0);
-   if bytes <= 0 then do;
+   if bytes = 0 then do;
      display('recv no reply');
      stop;
    end;

@@ -27,13 +27,13 @@
    bytes = net_write(conn, msg);
 
    /* half-close write side - errors signal */
-   bytes = net_shutdown(conn, 1); /* 1=write */
+   call net_shutdown(conn, 1); /* 1=write */
 
    /* read echo before full close - 0 is eof, not signalled */
    bytes = net_read(conn, resp);
 
    /* close - errors signal */
-   bytes = net_close(conn);
+   call net_close(conn);
    display('shutdown_close ok');
 
    /* expect refused connect on unused port */

@@ -25,7 +25,7 @@
    display('poll 0 timeout ok');
 
    /* send payload */
-   bytes = net_write(conn, msg);
+   call net_write(conn, msg);
 
    /* poll with 2s timeout should become readable */
    revents = net_poll(conn, 2000, POLL.IN);
@@ -33,15 +33,12 @@
      display('poll 2s expected readable got 0');
      stop;
    end;
-   if revents < 0 then do;
-     display('poll error ' || revents);
-     stop;
-   end;
+   /* revents <0 signalled via neterror */
    display('poll readable ok revents ' || revents);
 
    /* read and verify echo */
    bytes = net_read(conn, resp);
-   if bytes <= 0 then do;
+   if bytes = 0 then do;
      display('poll no reply');
      stop;
    end;

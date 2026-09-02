@@ -40,9 +40,9 @@
              'Host: localhost' || CR_LF ||
              'Connection: close' || CR_LF || CR_LF;
 
-   bytes = net_write(conn2, request);
+   call net_write(conn2, request);
    bytes = net_read(conn2, response);
-   if bytes <= 0 then do;
+   if bytes = 0 then do;
      display('dial read 0');
      stop;
    end;

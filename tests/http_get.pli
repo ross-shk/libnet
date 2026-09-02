@@ -22,11 +22,11 @@
    call net_dial(conn, '127.0.0.1:18080', AF.INET);
 
    /* send full request, retrying short writes */
-   bytes = net_write_all(conn, request);
+   call net_write_all(conn, request);
 
    /* read full response until close */
    bytes = net_read_all(conn, response);
-   if bytes <= 0 then do;
+   if bytes = 0 then do;
      display('http_get read 0');
      stop;
    end;

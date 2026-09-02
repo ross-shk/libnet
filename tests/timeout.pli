@@ -37,12 +37,12 @@
      dcl path char(*) varying;
      request = 'GET ' || path || ' HTTP/1.1' || CR_LF ||
                'Host: 127.0.0.1' || CR_LF || CR_LF;
-     bytes = net_write(conn, request);
+     call net_write(conn, request);
    end send_get;
 
    /* helper: verify response contains 200 */
    check_200: proc;
-     if bytes <= 0 then do;
+     if bytes = 0 then do;
        display('read failed');
        stop;
      end;

@@ -33,7 +33,7 @@
 
    /* read client request */
    bytes = net_read(client, buffer);
-   if bytes <= 0 then do;
+   if bytes = 0 then do;
      display('server no data');
      goto done_client;
    end;
