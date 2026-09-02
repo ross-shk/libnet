@@ -1,0 +1,73 @@
+ main: proc options(main);
+ %include net;
+
+   /* e2e: non-blocking via fcntl O_NONBLOCK + poll + DONTWAIT */
+   dcl conn like conncb;
+   dcl msg char(256) varying init('Hello nonblocking!');
+   dcl resp char(4096);
+   dcl bytes size_t;
+   dcl revents fixed bin(31);
+
+   on condition(neterror) begin;
+     display('nonblocking failed code ' || oncode());
+     stop;
+   end;
+
+   call net_open(conn, AF.INET, SOCK_TYPE.STREAM, 0);
+   call net_connect(conn, '127.0.0.1', 18080);
+
+   /* enable non-blocking */
+   call net_set_nonblocking(conn, 1);
+   display('nonblocking enable ok flags ' || conn.flags);
+
+   /* poll 0 should be 0 before server echo (no data) */
+   revents = net_poll(conn, 0, POLL.IN);
+   display('poll immediate revents ' || revents);
+
+   /* per-call DONTWAIT should also be would-block (0) before data */
+   bytes = net_recv(conn, resp, MSG_FLAG.DONTWAIT);
+   if bytes ¬= 0 then do;
+     display('DONTWAIT expected 0 would-block got ' || bytes);
+     stop;
+   end;
+   display('DONTWAIT would-block ok');
+
+   /* send via non-blocking socket (poll for writable first) */
+   revents = net_poll(conn, 1000, POLL.OUT);
+   if revents = 0 then do;
+     display('poll OUT timeout');
+     stop;
+   end;
+   bytes = net_write(conn, msg);
+   if bytes = 0 then do;
+     display('nonblocking write would-block');
+     stop;
+   end;
+
+   /* poll for readable echo */
+   revents = net_poll(conn, 2000, POLL.IN);
+   if revents = 0 then do;
+     display('poll IN timeout after write');
+     stop;
+   end;
+
+   /* non-blocking read should now have data */
+   bytes = net_read(conn, resp);
+   if bytes = 0 then do;
+     display('nonblocking read no data');
+     stop;
+   end;
+   if substr(resp, 1, bytes) ¬= msg then do;
+     display('nonblocking mismatch');
+     display('got: ' || substr(resp, 1, bytes));
+     display('exp: ' || msg);
+     stop;
+   end;
+
+   /* disable non-blocking */
+   call net_set_nonblocking(conn, 0);
+   display('nonblocking disable ok flags ' || conn.flags);
+
+   display('nonblocking ok');
+   call net_close(conn);
+ end main;

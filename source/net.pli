@@ -2,7 +2,7 @@
 
  net: package exports(net_connect, net_dial, net_send, net_recv,
    net_read, net_read_all, net_write, net_write_all, net_close, net_shutdown, 
-   net_open, net_resolve, net_poll);
+   net_open, net_resolve, net_poll, net_set_nonblocking);
 
  %include c_bridge;
  %include net_errors;
@@ -118,6 +118,10 @@
 
    /* handle send error */
    if bytes_sent < 0 then do;
+     if c_get_errno() = 11 | c_get_errno() = 35 then do;
+       if mod(flags, 128) >= 64 | mod(conn.flags, 4096) >= 2048 then
+         return(0);
+     end;
      signal condition(neterror) set oncode(c_get_errno());
    end;
    return(bytes_sent);
@@ -138,6 +142,10 @@
       length(response), flags);
    /* handle receive error */
    if bytes_received < 0 then do;
+     if c_get_errno() = 11 | c_get_errno() = 35 then do;
+       if mod(flags, 128) >= 64 | mod(conn.flags, 4096) >= 2048 then
+         return(0);
+     end;
      signal condition(neterror) set oncode(c_get_errno());
      return(bytes_received);
    end;
@@ -197,6 +205,10 @@
 
    /* handle write error */
    if n < 0 then do;
+     if c_get_errno() = 11 | c_get_errno() = 35 then do;
+       if mod(conn.flags, 4096) >= 2048 then
+         return(0);
+     end;
      signal condition(neterror) set oncode(c_get_errno());
      return(n);
    end;
@@ -216,6 +228,10 @@
 
    /* handle read error */
    if bytes_read < 0 then do;
+     if c_get_errno() = 11 | c_get_errno() = 35 then do;
+       if mod(conn.flags, 4096) >= 2048 then
+         return(0);
+     end;
      signal condition(neterror) set oncode(c_get_errno());
      return(bytes_read);
    end;
@@ -334,4 +350,29 @@
    return(revents);
  end net_poll;
 
- end net;
+ net_set_nonblocking: proc(conn, enable);
+   dcl conn like conncb;
+   dcl enable fixed bin(31);
+   dcl rc fixed bin(31);
+
+   /* set O_NONBLOCK via fcntl, EINTR retry in C is not needed */
+   rc = c_set_nonblocking(conn.fd, enable);
+   if rc < 0 then do;
+     signal condition(neterror) set oncode(c_get_errno());
+     return;
+   end;
+   /* update cached flags: maintain SOCK_FLAGS.NONBLOCK bit via arithmetic */
+   if enable ¬= 0 then do;
+     /* enable: set bit 2048 if not already set */
+     if mod(conn.flags, 4096) < 2048 then
+       conn.flags = conn.flags + SOCK_FLAGS.NONBLOCK;
+   end;
+   else do;
+     /* disable: clear bit 2048 if set */
+     if mod(conn.flags, 4096) >= 2048 then
+       conn.flags = conn.flags - SOCK_FLAGS.NONBLOCK;
+   end;
+   return;
+ end net_set_nonblocking;
+
+  end net;

@@ -11,6 +11,7 @@
 #include <netdb.h>
 #include <sys/time.h>
 #include <poll.h>
+#include <fcntl.h>
 
 int default_accept(int server_fd) {
   struct sockaddr_in client_addr;
@@ -135,4 +136,16 @@ int c_poll(int fd, int timeout_ms, int events) {
   if (r < 0) return -1;
   if (r == 0) return 0;
   return pfd.revents;
+}
+
+int c_set_nonblocking(int fd, int enable) {
+  int flags;
+  /* get current flags */
+  flags = fcntl(fd, F_GETFL, 0);
+  if (flags < 0) return -1;
+  if (enable)
+    flags |= O_NONBLOCK;
+  else
+    flags &= ~O_NONBLOCK;
+  return fcntl(fd, F_SETFL, flags);
 }

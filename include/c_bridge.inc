@@ -117,3 +117,9 @@
    fixed bin(31)   /* events mask (POLL.IN etc) */
  ) returns(fixed bin(31))  /* 0 timeout, >0 revents, -1 error */
    options(linkage(system)) external('c_poll');
+
+ dcl c_set_nonblocking entry (
+   sock_fd_t,    /* socket descriptor */
+   fixed bin(31)   /* 1 enable, 0 disable */
+ ) returns(fixed bin(31))
+   options(linkage(system)) external('c_set_nonblocking');

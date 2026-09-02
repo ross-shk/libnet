@@ -72,4 +72,9 @@ dcl net_read entry (
    fixed bin(31),  /* timeout ms, -1 infinite, 0 immediate */
    fixed bin(31)   /* events mask POLL.IN etc */
  ) returns(fixed bin(31));
+
+ dcl net_set_nonblocking entry (
+   like conncb,
+   fixed bin(31)   /* 1 enable, 0 disable */
+ );
   
