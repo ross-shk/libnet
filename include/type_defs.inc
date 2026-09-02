@@ -46,6 +46,13 @@
 
  dcl SOMAXCONN fixed bin(31) static init(4096); /* SOMAXCONN */
 
+ dcl 1 ERR static,
+       2 AGAIN fixed bin(31) init(11),      /* EAGAIN */
+       2 WOULDBLOCK fixed bin(31) init(35), /* EWOULDBLOCK macOS/BSD */
+       2 TIMEDOUT fixed bin(31) init(110),  /* ETIMEDOUT */
+       2 BADURL fixed bin(31) init(61);     /* malformed url in
+       net_dial */
+
  dcl 1 POLL static,
        2 IN   fixed bin(31) init(1),   /* POLLIN */
        2 OUT  fixed bin(31) init(4),   /* POLLOUT */

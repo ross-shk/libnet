@@ -81,7 +81,7 @@
 
      /* handle missing colon */
      if pos = 0 then do;
-       signal condition(neterror) set oncode(61);
+       signal condition(neterror) set oncode(ERR.BADURL);
        return;
      end;
      else do;
@@ -118,8 +118,10 @@
 
    /* handle send error */
    if bytes_sent < 0 then do;
-     if c_get_errno() = 11 | c_get_errno() = 35 then do;
-       if mod(flags, 128) >= 64 | mod(conn.flags, 4096) >= 2048 then
+     if c_get_errno() = ERR.AGAIN | c_get_errno() = ERR.WOULDBLOCK then do;
+       if mod(flags, MSG_FLAG.DONTWAIT*2) >= MSG_FLAG.DONTWAIT | 
+        mod(conn.flags, SOCK_FLAGS.NONBLOCK*2) >= SOCK_FLAGS.NONBLOCK 
+       then
          return(0);
      end;
      signal condition(neterror) set oncode(c_get_errno());
@@ -142,8 +144,10 @@
       length(response), flags);
    /* handle receive error */
    if bytes_received < 0 then do;
-     if c_get_errno() = 11 | c_get_errno() = 35 then do;
-       if mod(flags, 128) >= 64 | mod(conn.flags, 4096) >= 2048 then
+     if c_get_errno() = ERR.AGAIN | c_get_errno() = ERR.WOULDBLOCK then do;
+       if mod(flags, MSG_FLAG.DONTWAIT*2) >= MSG_FLAG.DONTWAIT | 
+        mod(conn.flags, SOCK_FLAGS.NONBLOCK*2) >= SOCK_FLAGS.NONBLOCK 
+       then
          return(0);
      end;
      signal condition(neterror) set oncode(c_get_errno());
@@ -205,8 +209,8 @@
 
    /* handle write error */
    if n < 0 then do;
-     if c_get_errno() = 11 | c_get_errno() = 35 then do;
-       if mod(conn.flags, 4096) >= 2048 then
+     if c_get_errno() = ERR.AGAIN | c_get_errno() = ERR.WOULDBLOCK then do;
+       if mod(conn.flags, SOCK_FLAGS.NONBLOCK*2) >= SOCK_FLAGS.NONBLOCK then
          return(0);
      end;
      signal condition(neterror) set oncode(c_get_errno());
@@ -228,8 +232,8 @@
 
    /* handle read error */
    if bytes_read < 0 then do;
-     if c_get_errno() = 11 | c_get_errno() = 35 then do;
-       if mod(conn.flags, 4096) >= 2048 then
+     if c_get_errno() = ERR.AGAIN | c_get_errno() = ERR.WOULDBLOCK then do;
+       if mod(conn.flags, SOCK_FLAGS.NONBLOCK*2) >= SOCK_FLAGS.NONBLOCK then
          return(0);
      end;
      signal condition(neterror) set oncode(c_get_errno());
@@ -358,7 +362,7 @@
      signal condition(neterror) set oncode(c_get_errno());
      return;
    end;
-   if mod(conn.flags, 4096) < 2048 then
+   if mod(conn.flags, SOCK_FLAGS.NONBLOCK*2) < SOCK_FLAGS.NONBLOCK then
      conn.flags = conn.flags + SOCK_FLAGS.NONBLOCK;
    return;
  end net_set_nonblocking;
@@ -371,7 +375,7 @@
      signal condition(neterror) set oncode(c_get_errno());
      return;
    end;
-   if mod(conn.flags, 4096) >= 2048 then
+   if mod(conn.flags, SOCK_FLAGS.NONBLOCK*2) >= SOCK_FLAGS.NONBLOCK then
      conn.flags = conn.flags - SOCK_FLAGS.NONBLOCK;
    return;
  end net_set_default;

@@ -11,8 +11,9 @@
    /* handle expected timeout vs unexpected */
    on condition(neterror) begin;
      if expect_timeout then do;
-       /* EAGAIN 11 or ETIMEDOUT 110 both mean timeout on linux */
-       if oncode() = 11 | oncode() = 110 | oncode() = 35 then do;
+       /* ERR.AGAIN or ERR.TIMEDOUT both mean timeout */
+       if oncode() = ERR.AGAIN | oncode() = ERR.TIMEDOUT | 
+          oncode() = ERR.WOULDBLOCK then do;
          display('timeout ok code ' || oncode());
          goto timeout_ok;
        end;

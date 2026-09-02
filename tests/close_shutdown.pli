@@ -27,7 +27,7 @@
    bytes = net_write(conn, msg);
 
    /* half-close write side - errors signal */
-   call net_shutdown(conn, 1); /* 1=write */
+   call net_shutdown(conn, SHUT.WR);
 
    /* read echo before full close - 0 is eof, not signalled */
    bytes = net_read(conn, resp);
