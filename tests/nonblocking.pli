@@ -17,7 +17,7 @@
    call net_connect(conn, '127.0.0.1', 18080);
 
    /* enable non-blocking */
-   call net_set_nonblocking(conn, 1);
+   call net_set_nonblocking(conn);
    display('nonblocking enable ok flags ' || conn.flags);
 
    /* poll 0 should be 0 before server echo (no data) */
@@ -65,7 +65,7 @@
    end;
 
    /* disable non-blocking */
-   call net_set_nonblocking(conn, 0);
+   call net_set_default(conn);
    display('nonblocking disable ok flags ' || conn.flags);
 
    display('nonblocking ok');

@@ -65,7 +65,9 @@ Always declare as `dcl conn like conncb;`. It's `aligned based`.
 * **`net_poll(conn, timeout, events)`** (`source/net.pli:323`) — `c_poll` (`include/c_bridge.inc:106` → `c_poll` `source/c_bridge.c:114`, `poll(2)` with `EINTR` retry). `timeout` is ms (`-1` block forever, `0` return immediately), `events` is `POLL.IN`/`OUT` mask. Returns `0` on timeout, `>0` `revents` mask (`POLL.IN` etc), `<0` on error (also signals `neterror` with `oncode()` = `errno`). Use to wait for `POLL.IN` before `net_read`/`net_accept` instead of blocking or `read_timeout`. Example: `if net_poll(client, 500, POLL.IN) = 0 then /* timeout */; else bytes = net_read(client, buf);`.
 
 ### Non-blocking
-* **`net_set_nonblocking(conn, enable)`** (`source/net.pli:335`) — `c_set_nonblocking` (`include/c_bridge.inc:119` → `c_set_nonblocking` `source/c_bridge.c:125`, `fcntl O_NONBLOCK`). `enable` `1`/`0`, returns `0` ok / `<0` error (signals `neterror`), updates `conn.flags` `SOCK_FLAGS.NONBLOCK` bit via `mod`. Use with `net_poll` for readiness: `call net_set_nonblocking(conn, 1); if net_poll(conn, 0, POLL.IN) >0 then bytes = net_read(conn, buf);` — `net_read`/`net_write`/`net_recv`/`net_send` that would block signal `neterror 11` (`EAGAIN`) same as timeout, so poll first or handle `oncode 11`. Alternative per-call non-blocking: `net_recv(conn, buf, MSG_FLAG.DONTWAIT)` / `net_send(..., MSG_FLAG.DONTWAIT)` without changing socket mode.
+* **`net_set_nonblocking(conn)`** (`source/net.pli:353`) — `c_set_nonblocking(...,1)` (`include/c_bridge.inc:119` → `c_set_nonblocking` `source/c_bridge.c:125`, `fcntl O_NONBLOCK`), signals `neterror` on error, sets `conn.flags` `SOCK_FLAGS.NONBLOCK`. Blocking is default (`net_open` creates blocking socket).
+* **`net_set_default(conn)`** (`source/net.pli:366`) — `c_set_nonblocking(...,0)` restores blocking, clears `SOCK_FLAGS.NONBLOCK`, signals `neterror` on error. Pair with `net_set_nonblocking` for explicit toggling: `call net_set_nonblocking(conn); if net_poll(conn, 0, POLL.IN) >0 then bytes = net_read(conn, buf); call net_set_default(conn);` — `net_read`/`net_write`/`net_recv`/`net_send` that would block signal `neterror 11` (`EAGAIN`) same as timeout, so poll first or handle `oncode 11`. 
+Per-call alternative: `net_recv(conn, buf, MSG_FLAG.DONTWAIT)` / `net_send(..., MSG_FLAG.DONTWAIT)` without changing mode.
 
 ### Errors
 Single condition `neterror` (`include/net_errors.inc:1`). Every failing call signals with `oncode()` as the error number. Example:
@@ -109,7 +111,7 @@ No separate setter — just assign:
  bytes = net_read(conn, buf); /* honors read_timeout -> neterror */
 ```
 
-Applied automatically in `net_read`/`net_read_all`/`net_recv` (`read_timeout`), `net_write`/`net_write_all`/`net_send`/`net_connect` (`write_timeout`), and `net_accept` (`server.read_timeout`). `c_set_timeout` (`source/c_bridge.c:89`) maps ms → `setsockopt(SO_RCVTIMEO/SO_SNDTIMEO)`. See `tests/timeout.pli:28` — timeout surfaces as `neterror` with `oncode 11` (`EAGAIN`) or `110` (`ETIMEDOUT`) on Linux. For explicit readiness waiting without changing socket timeout, use `net_poll` `source/net.pli:323` (`poll` timeout `-1`/`0`/`>0` independent of `conn.read_timeout`). Non-blocking `net_set_nonblocking` `source/net.pli:335` bypasses `SO_RCVTIMEO` — would-block also surfaces as `11`.
+Applied automatically in `net_read`/`net_read_all`/`net_recv` (`read_timeout`), `net_write`/`net_write_all`/`net_send`/`net_connect` (`write_timeout`), and `net_accept` (`server.read_timeout`). `c_set_timeout` (`source/c_bridge.c:89`) maps ms → `setsockopt(SO_RCVTIMEO/SO_SNDTIMEO)`. See `tests/timeout.pli:28` — timeout surfaces as `neterror` with `oncode 11` (`EAGAIN`) or `110` (`ETIMEDOUT`) on Linux. For explicit readiness waiting without changing socket timeout, use `net_poll` `source/net.pli:323` (`poll` timeout `-1`/`0`/`>0` independent of `conn.read_timeout`). Non-blocking `net_set_nonblocking`/`net_set_default` `source/net.pli:353` bypasses `SO_RCVTIMEO` — would-block also surfaces as `11`.
 
 ---
 ## Diagnostics
@@ -143,7 +145,7 @@ With flags, poll and non-blocking:
  bytes = net_recv(conn, response, MSG_FLAG.PEEK);
  call net_shutdown(conn, SHUT.RDWR);
  if net_poll(conn, 1000, POLL.IN) > 0 then bytes = net_read(conn, buf); /* 1s poll */
- call net_set_nonblocking(conn, 1);           /* O_NONBLOCK via fcntl */
+ call net_set_nonblocking(conn);              /* O_NONBLOCK via fcntl */
  if net_poll(conn, 0, POLL.IN) > 0 then bytes = net_read(conn, buf); /* non-blocking poll+read */
 ```
 

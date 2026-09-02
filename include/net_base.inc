@@ -74,7 +74,9 @@ dcl net_read entry (
  ) returns(fixed bin(31));
 
  dcl net_set_nonblocking entry (
-   like conncb,
-   fixed bin(31)   /* 1 enable, 0 disable */
+   like conncb
  );
-  
+
+ dcl net_set_default entry (
+   like conncb
+ );

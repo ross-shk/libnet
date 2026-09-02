@@ -9,11 +9,11 @@ Small PL/I networking lib for Iron Spring `1.4.1` (`linux/386`).
 - `include/type_defs.inc` — `%replace` types (`sock_fd_t` etc) + `AF`/`SOCK_TYPE`/`SOCK_FLAGS`/`INADDR`/`MSG_FLAG`/`SHUT`/`POLL`/`SOMAXCONN` + `conncb`
 - `include/c_bridge.inc` — `c_socket`/`c_bind`/`c_connect`/`c_read`/`c_write`/`c_close`/`c_set_timeout`/`c_getsockname`/`c_getpeername`/`c_poll`/`c_set_nonblocking`…
 - `include/net_helpers.inc` — **internal** shared `apply_timeout` helper (not in `net.inc`/`dist/net.inc`)
-- `include/net_base.inc` — client `net_open`/`net_connect`/`net_dial`/`net_resolve`/`net_read`/`net_write`/`net_send`/`net_recv`/`net_poll`/`net_set_nonblocking`…
+- `include/net_base.inc` — client `net_open`/`net_connect`/`net_dial`/`net_resolve`/`net_read`/`net_write`/`net_send`/`net_recv`/`net_poll`/`net_set_nonblocking`/`net_set_default`…
 - `include/net_server.inc` — `net_listen`/`net_accept`
 - `include/net_errors.inc` — `neterror` condition (`oncode` = `errno` via `c_get_errno`)
 - `include/net.inc` — re-exports `net_errors` + `net_base` + `net_server` (single `%include net;`)
-- `source/net.pli` — client package `net: package exports(...)` (13 procs inc `net_poll`/`net_set_nonblocking` + `apply_timeout` helper)
+- `source/net.pli` — client package `net: package exports(...)` (14 procs inc `net_poll`/`net_set_nonblocking`/`net_set_default` + `apply_timeout` helper)
 - `source/net_server.pli` — server package (2 procs) (helpers via `net_helpers`)
 - `source/c_bridge.c` — `bind_to_port`/`connect_to_host`/`resolve_hostname`/`c_set_timeout`/`default_accept`/`c_getsockname`/`c_getpeername`/`c_poll`/`c_set_nonblocking`
 - `build.sh` — `build|run <src.pli>` auto-Docker on macOS, fallback to `../libnet.a` if `pkg-config` missing
