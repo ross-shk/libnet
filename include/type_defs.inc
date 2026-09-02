@@ -15,37 +15,43 @@
  %replace MAX_IP_LEN by "46";  /* ipv6 max 45 + nul */
 
  dcl 1 AF static,
-       2 UNSPEC fixed bin(31) init(0),
-       2 UNIX   fixed bin(31) init(1),
-       2 INET   fixed bin(31) init(2),
-       2 INET6  fixed bin(31) init(10);
-                 /* not wired, see c_bridge.c */
+       2 UNSPEC fixed bin(31) init(0),   /* AF_UNSPEC */
+       2 UNIX   fixed bin(31) init(1),   /* AF_UNIX */
+       2 INET   fixed bin(31) init(2),   /* AF_INET */
+       2 INET6  fixed bin(31) init(10);  /* AF_INET6 */
 
  dcl 1 SOCK_TYPE static,
-       2 STREAM fixed bin(31) init(1),
-       2 DGRAM  fixed bin(31) init(2),
-       2 RAW    fixed bin(31) init(3);
+       2 STREAM fixed bin(31) init(1),   /* SOCK_STREAM */
+       2 DGRAM  fixed bin(31) init(2),   /* SOCK_DGRAM */
+       2 RAW    fixed bin(31) init(3);   /* SOCK_RAW */
 
  dcl 1 SOCK_FLAGS static,
-       2 CLOEXEC  fixed bin(31) init(524288), /* 0x80000 */
-       2 NONBLOCK fixed bin(31) init(2048);  /* 0x800 */
+       2 CLOEXEC  fixed bin(31) init(524288), /* SOCK_CLOEXEC 0x80000 */
+       2 NONBLOCK fixed bin(31) init(2048);  /* SOCK_NONBLOCK 0x800 */
 
  dcl 1 INADDR static,
-       2 ANY       fixed bin(31) init(0),
-       2 BROADCAST fixed bin(31) init(-1);
+       2 ANY       fixed bin(31) init(0),   /* INADDR_ANY */
+       2 BROADCAST fixed bin(31) init(-1);  /* INADDR_BROADCAST */
 
  dcl 1 MSG_FLAG static,
-       2 PEEK     fixed bin(31) init(2),
-       2 WAITALL  fixed bin(31) init(256),
-       2 DONTWAIT fixed bin(31) init(64),
-       2 NOSIGNAL fixed bin(31) init(16384);
+       2 PEEK     fixed bin(31) init(2),     /* MSG_PEEK */
+       2 WAITALL  fixed bin(31) init(256),   /* MSG_WAITALL */
+       2 DONTWAIT fixed bin(31) init(64),    /* MSG_DONTWAIT */
+       2 NOSIGNAL fixed bin(31) init(16384); /* MSG_NOSIGNAL */
 
  dcl 1 SHUT static,
-       2 RD     fixed bin(31) init(0),
-       2 WR     fixed bin(31) init(1),
-       2 RDWR   fixed bin(31) init(2);
+       2 RD     fixed bin(31) init(0),   /* SHUT_RD */
+       2 WR     fixed bin(31) init(1),   /* SHUT_WR */
+       2 RDWR   fixed bin(31) init(2);   /* SHUT_RDWR */
 
- dcl SOMAXCONN fixed bin(31) static init(4096);
+ dcl SOMAXCONN fixed bin(31) static init(4096); /* SOMAXCONN */
+
+ dcl 1 POLL static,
+       2 IN   fixed bin(31) init(1),   /* POLLIN */
+       2 OUT  fixed bin(31) init(4),   /* POLLOUT */
+       2 ERR  fixed bin(31) init(8),   /* POLLERR */
+       2 HUP  fixed bin(31) init(16),  /* POLLHUP */
+       2 NVAL fixed bin(31) init(32);  /* POLLNVAL */
 
  /* conncb is aligned based - use 'dcl conn like conncb' */ 
  /* like loses initial, based requires implicit pointer */
@@ -61,4 +67,3 @@
        2 ipv4_addr   fixed bin(31),
        2 read_timeout  fixed bin(31) init(0),  /* ms, 0 infinite */
        2 write_timeout fixed bin(31) init(0);  /* ms, 0 infinite */
- 

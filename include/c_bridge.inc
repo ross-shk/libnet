@@ -110,3 +110,10 @@
    pointer       /* out port int* */
  ) returns(fixed bin(31))
    options(linkage(system)) external('c_getpeername');
+
+ dcl c_poll entry (
+   sock_fd_t,    /* socket descriptor */
+   fixed bin(31),  /* timeout ms, -1 infinite, 0 immediate */
+   fixed bin(31)   /* events mask (POLL.IN etc) */
+ ) returns(fixed bin(31))  /* 0 timeout, >0 revents, -1 error */
+   options(linkage(system)) external('c_poll');

@@ -66,4 +66,10 @@ dcl net_read entry (
    like conncb,
    char(*) varying
  );
+
+ dcl net_poll entry (
+   like conncb,
+   fixed bin(31),  /* timeout ms, -1 infinite, 0 immediate */
+   fixed bin(31)   /* events mask POLL.IN etc */
+ ) returns(fixed bin(31));
   

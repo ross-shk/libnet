@@ -10,6 +10,7 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <sys/time.h>
+#include <poll.h>
 
 int default_accept(int server_fd) {
   struct sockaddr_in client_addr;
@@ -119,4 +120,19 @@ int c_getpeername(int fd, char *out_ip, int out_len, int *out_port) {
   inet_ntop(AF_INET, &addr.sin_addr, out_ip, out_len);
   *out_port = ntohs(addr.sin_port);
   return 0;
+}
+
+int c_poll(int fd, int timeout_ms, int events) {
+  struct pollfd pfd;
+  int r;
+  /* poll single fd with EINTR retry */
+  pfd.fd = fd;
+  pfd.events = events;
+  pfd.revents = 0;
+  do {
+    r = poll(&pfd, 1, timeout_ms);
+  } while (r < 0 && errno == EINTR);
+  if (r < 0) return -1;
+  if (r == 0) return 0;
+  return pfd.revents;
 }

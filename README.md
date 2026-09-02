@@ -118,7 +118,7 @@ dockerize ./readme_usage
 
 ## Testing
 
-`make test` builds `tests/server.pli` (echo/http on `18080`, `/delay` sleeps `2000` via `delay`) and runs 7 e2e clients against it:
+`make test` builds `tests/server.pli` (echo/http on `18080`, `/delay` sleeps `2000` via `delay`) and runs 8 e2e clients against it:
 
 - `tests/http_get` — `net_dial` + HTTP
 - `tests/echo` — `net_open`/`net_connect` + `net_write`/`net_read` echo
@@ -127,6 +127,7 @@ dockerize ./readme_usage
 - `tests/close_shutdown` — `net_close`/`net_shutdown` (`SHUT.RDWR`)
 - `tests/timeout` — direct `conn.read_timeout` assignment, expects `neterror 11`/`110` on `/delay`
 - `tests/ephemeral` — `net_listen` with `port 0` verifies `server.port` assigned via `c_getsockname`, plus peer check
+- `tests/poll` — `net_poll` `POLL.IN` `0` timeout vs `2000` readable
 
 Run a single test: `./build.sh run tests/echo.pli` (server must be running — `make test` handles this automatically).
 

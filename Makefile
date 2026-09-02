@@ -148,7 +148,7 @@ clean:
 	rm -f $(OBJS) libnet.a *.o *.lst *.map
 	rm -rf dist
 	rm -f tests/*.o tests/*.lst tests/*.map
-	rm -f tests/server tests/http_get tests/echo tests/resolve_dial tests/close_shutdown tests/timeout tests/ephemeral tests/send_recv
-	rm -f tests/server.o tests/http_get.o tests/echo.o tests/resolve_dial.o tests/close_shutdown.o tests/timeout.o tests/ephemeral.o tests/send_recv.o
+	rm -f tests/server tests/http_get tests/echo tests/resolve_dial tests/close_shutdown tests/timeout tests/ephemeral tests/send_recv tests/poll
+	rm -f tests/server.o tests/http_get.o tests/echo.o tests/resolve_dial.o tests/close_shutdown.o tests/timeout.o tests/ephemeral.o tests/send_recv.o tests/poll.o
 
 distclean: clean uninstall

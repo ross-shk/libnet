@@ -1,0 +1,61 @@
+ main: proc options(main);
+ %include net;
+
+   /* e2e: poll for readable with timeout vs data ready */
+   dcl conn like conncb;
+   dcl msg char(256) varying init('Hello poll!');
+   dcl resp char(4096);
+   dcl bytes size_t;
+   dcl revents fixed bin(31);
+
+   on condition(neterror) begin;
+     display('poll failed code ' || oncode());
+     stop;
+   end;
+
+   call net_open(conn, AF.INET, SOCK_TYPE.STREAM, 0);
+   call net_connect(conn, '127.0.0.1', 18080);
+
+   /* no data yet - 0 timeout should return 0 immediately */
+   revents = net_poll(conn, 0, POLL.IN);
+   if revents ¬= 0 then do;
+     display('poll 0 timeout expected 0 got ' || revents);
+     stop;
+   end;
+   display('poll 0 timeout ok');
+
+   /* send payload */
+   bytes = net_write(conn, msg);
+
+   /* poll with 2s timeout should become readable */
+   revents = net_poll(conn, 2000, POLL.IN);
+   if revents = 0 then do;
+     display('poll 2s expected readable got 0');
+     stop;
+   end;
+   if revents < 0 then do;
+     display('poll error ' || revents);
+     stop;
+   end;
+   display('poll readable ok revents ' || revents);
+
+   /* read and verify echo */
+   bytes = net_read(conn, resp);
+   if bytes <= 0 then do;
+     display('poll no reply');
+     stop;
+   end;
+   if substr(resp, 1, bytes) ¬= msg then do;
+     display('poll mismatch');
+     display('got: ' || substr(resp, 1, bytes));
+     display('exp: ' || msg);
+     stop;
+   end;
+
+   /* poll after data consumed - immediate 0 */
+   revents = net_poll(conn, 0, POLL.IN);
+   display('poll after read revents ' || revents);
+
+   display('poll ok');
+   call net_close(conn);
+ end main;

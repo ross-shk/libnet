@@ -32,6 +32,7 @@ Always declare as `dcl conn like conncb;`. It's `aligned based`.
 * **`INADDR`** — for `net_listen` bind: `ANY=0`, `BROADCAST=-1`
 * **`MSG_FLAG`** — for `net_send`/`net_recv`: `PEEK`, `WAITALL`, `DONTWAIT`, `NOSIGNAL` (pass `0` for no flags)
 * **`SHUT`** — for `net_shutdown`: `RD`, `WR`, `RDWR`
+* **`POLL`** — for `net_poll` events: `IN` (`POLLIN`), `OUT` (`POLLOUT`), `ERR`, `HUP`, `NVAL`
 * **`SOMAXCONN`** — `4096`
 * **`CR_LF`** — `"'0D0A'x"`, `MAX_HOST_LEN=256`, `MAX_IP_LEN=46`
 
@@ -59,6 +60,9 @@ Always declare as `dcl conn like conncb;`. It's `aligned based`.
 ### Closing
 * **`net_close(conn)`** (`source/net.pli:279`) — `c_close` (`include/c_bridge.inc:86`) if `fd >=0`, clears `is_connected`. Returns `0` ok, `<0` error (also signals `neterror`).
 * **`net_shutdown(conn, how)`** (`source/net.pli:296`) — `c_shutdown` (`include/c_bridge.inc:23` → `shutdown`). `how` is `SHUT.RD` (`0`) / `SHUT.WR` (`1`) / `SHUT.RDWR` (`2`).
+
+### Polling
+* **`net_poll(conn, timeout, events)`** (`source/net.pli:310`) — `c_poll` (`include/c_bridge.inc:106` → `c_poll` `source/c_bridge.c:114`, `poll(2)` with `EINTR` retry). `timeout` is ms (`-1` block forever, `0` return immediately), `events` is `POLL.IN`/`OUT` mask. Returns `0` on timeout, `>0` `revents` mask (`POLL.IN` etc), `<0` on error (also signals `neterror` with `oncode()` = `errno`). Use to wait for `POLL.IN` before `net_read`/`net_accept` instead of blocking or `read_timeout`. Example: `if net_poll(client, 500, POLL.IN) = 0 then /* timeout */; else bytes = net_read(client, buf);`.
 
 ### Errors
 Single condition `neterror` (`include/net_errors.inc:1`). Every failing call signals with `oncode()` as the error number. Example:
@@ -102,7 +106,7 @@ No separate setter — just assign:
  bytes = net_read(conn, buf); /* honors read_timeout -> neterror */
 ```
 
-Applied automatically in `net_read`/`net_read_all`/`net_recv` (`read_timeout`), `net_write`/`net_write_all`/`net_send`/`net_connect` (`write_timeout`), and `net_accept` (`server.read_timeout`). `c_set_timeout` (`source/c_bridge.c:89`) maps ms → `setsockopt(SO_RCVTIMEO/SO_SNDTIMEO)`. See `tests/timeout.pli:28` — timeout surfaces as `neterror` with `oncode 11` (`EAGAIN`) or `110` (`ETIMEDOUT`) on Linux.
+Applied automatically in `net_read`/`net_read_all`/`net_recv` (`read_timeout`), `net_write`/`net_write_all`/`net_send`/`net_connect` (`write_timeout`), and `net_accept` (`server.read_timeout`). `c_set_timeout` (`source/c_bridge.c:89`) maps ms → `setsockopt(SO_RCVTIMEO/SO_SNDTIMEO)`. See `tests/timeout.pli:28` — timeout surfaces as `neterror` with `oncode 11` (`EAGAIN`) or `110` (`ETIMEDOUT`) on Linux. For explicit readiness waiting without changing socket timeout, use `net_poll` `source/net.pli:310` (`poll` timeout `-1`/`0`/`>0` independent of `conn.read_timeout`).
 
 ---
 ## Diagnostics
@@ -129,12 +133,13 @@ Applied automatically in `net_read`/`net_read_all`/`net_recv` (`read_timeout`), 
  end main;
 ```
 
-With flags:
+With flags and poll:
 
 ```pli
  bytes = net_send(conn, request, 0);          /* or MSG_FLAG.NOSIGNAL */
  bytes = net_recv(conn, response, MSG_FLAG.PEEK);
  call net_shutdown(conn, SHUT.RDWR);
+ if net_poll(conn, 1000, POLL.IN) > 0 then bytes = net_read(conn, buf); /* 1s poll */
 ```
 
-More in `examples/readme_usage` (`net_dial` + `net_write_all`/`net_read_all`), `examples/use_socket` (`net_open`/`net_connect` + `net_write`/`net_read`), `examples/ephemeral` (`port 0` + peer via `getpeername`), `examples/client_server` pair, `tests/timeout` (direct `read_timeout`), `tests/send_recv` (`net_send`/`net_recv` `flags=0`), `tests/ephemeral` (`c_getsockname`/`c_getpeername`).
+More in `examples/readme_usage` (`net_dial` + `net_write_all`/`net_read_all`), `examples/use_socket` (`net_open`/`net_connect` + `net_write`/`net_read`), `examples/ephemeral` (`port 0` + peer via `getpeername`), `examples/client_server` pair, `tests/timeout` (direct `read_timeout`), `tests/send_recv` (`net_send`/`net_recv` `flags=0`), `tests/ephemeral` (`c_getsockname`/`c_getpeername`), `tests/poll` (`net_poll` `POLL.IN` timeout vs readable).

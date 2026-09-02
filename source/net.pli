@@ -2,7 +2,7 @@
 
  net: package exports(net_connect, net_dial, net_send, net_recv,
    net_read, net_read_all, net_write, net_write_all, net_close, net_shutdown, 
-   net_open, net_resolve);
+   net_open, net_resolve, net_poll);
 
  %include c_bridge;
  %include net_errors;
@@ -300,7 +300,7 @@
    dcl rc fixed bin(31);
    dcl null_pos fixed bin(31);
 
-   /* resolve hostname to ip */
+    /* resolve hostname to ip */
    begin;
      c_host = substr(hostname, 1, length(hostname)) || '00'x;
      rc = c_resolve_hostname(addr(c_host), conn.addr_family, 
@@ -319,5 +319,19 @@
    conn.host_name = trim(substr(hostname, 1, length(hostname)));
    conn.ip_addr = substr(ip_buf, 1, null_pos - 1);
  end net_resolve;
+
+ net_poll: proc(conn, timeout, events) returns(fixed bin(31));
+   dcl conn like conncb;
+   dcl (timeout, events) fixed bin(31);
+   dcl revents fixed bin(31);
+
+   /* poll single fd, EINTR retry in C, 0 timeout, -1 error */
+   revents = c_poll(conn.fd, timeout, events);
+   if revents < 0 then do;
+     signal condition(neterror) set oncode(c_get_errno());
+     return(revents);
+   end;
+   return(revents);
+ end net_poll;
 
  end net;
