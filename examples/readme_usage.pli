@@ -12,10 +12,11 @@
 
    declare
      request  char(256) varying,
-     response char(2048),
      host     char(256) varying init('example.com:80'),
      bytes    size_t,
-     conn     like conncb;
+     conn     like conncb,
+     response_ptr pointer init(null),
+     response char(MAX_VARYING) varying based(response_ptr);
   
    on condition(neterror) begin;  /* handle low-level network errors */
      display('Networking error, code = ' || oncode());
@@ -28,13 +29,16 @@
        'Connection: close' || CR_LF || CR_LF;
    
    call net_dial(conn, host, AF.INET);  /* host is auto-resolved */
+   conn.read_timeout = 5000; /* avoid hang */
+   conn.write_timeout = 5000;
 
    call net_write_all(conn, request); 
-   bytes = net_read_all(conn, response);
+   bytes = net_read_all(conn, response_ptr);
 
    /* only reached unless there's a network error */
-   display('Response ' || substr(response, 1, bytes));
+   display('Response ' || response);
  
  done:
+   if response_ptr ¬= null then free response;
    call net_close(conn); 
  end;

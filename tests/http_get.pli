@@ -3,7 +3,8 @@
 
    /* e2e: http get via net_dial + writeall/readall */
    dcl request char(512) varying;
-   dcl response char(4096);
+   dcl response_ptr pointer init(null);
+   dcl response char(MAX_VARYING) varying based(response_ptr);
    dcl bytes size_t;
    dcl conn like conncb;
 
@@ -24,8 +25,8 @@
    /* send full request, retrying short writes */
    call net_write_all(conn, request);
 
-   /* read full response until close */
-   bytes = net_read_all(conn, response);
+   /* read full response until close - dynamic heap, hides loop */
+   bytes = net_read_all(conn, response_ptr);
    if bytes = 0 then do;
      display('http_get read 0');
      stop;
@@ -44,5 +45,6 @@
    end;
 
    display('http_get ok ' || trim(char(bytes)) || ' bytes');
+   free response;
    call net_close(conn);
  end main;

@@ -13,6 +13,7 @@
  %replace CR_LF by "'0D0A'x";
  %replace MAX_HOST_LEN by "256";  /* rfc 1035 */
  %replace MAX_IP_LEN by "46";  /* ipv6 max 45 + nul */
+ %replace MAX_VARYING by "32767"; /* max for varying char */
 
  dcl 1 AF static,
        2 UNSPEC fixed bin(31) init(0),   /* AF_UNSPEC */
@@ -50,8 +51,9 @@
        2 AGAIN fixed bin(31) init(11),      /* EAGAIN */
        2 WOULDBLOCK fixed bin(31) init(35), /* EWOULDBLOCK macOS/BSD */
        2 TIMEDOUT fixed bin(31) init(110),  /* ETIMEDOUT */
-       2 BADURL fixed bin(31) init(61);     /* malformed url in
+       2 BADURL fixed bin(31) init(61),     /* malformed url in 
        net_dial */
+       2 TOOLARGE fixed bin(31) init(75);   /* response >maxlength */
 
  dcl 1 POLL static,
        2 IN   fixed bin(31) init(1),   /* POLLIN */

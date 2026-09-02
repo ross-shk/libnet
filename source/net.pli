@@ -245,39 +245,65 @@
    return(bytes_read);
  end net_read;
 
- net_read_all: proc(conn, buffer) returns(size_t);
+ net_read_all: proc(conn, p) returns(size_t);
    dcl conn like conncb;
-   dcl buffer char(*);
+   dcl p pointer;
+   
+   dcl heap char(MAX_VARYING) varying based(p);
+   dcl chunk char(4096);
+   dcl n size_t;
 
-   dcl total_read size_t init(0);
+   init_heap: proc;
+     /* ensure p is null or free previous heap to avoid leak */
+     if p ¬= null then do;
+       free heap;
+       p = null;
+     end;
 
-   /* apply read timeout */
-   call apply_timeout(conn, 1);
+     allocate heap set(p);
 
-   /* loop until buffer full or eof */
-   begin;
-     dcl buf_ptr ptr;
-     buf_ptr = addr(buffer);
+     if p = null then do;
+       signal condition(neterror) set oncode(12);
+       return;
+     end;
+     heap = '';
+   end init_heap;
+
+   cleanup_and_signal: proc(code) returns(size_t);
+     dcl code fixed bin(31);
+
+     free heap;
+     p = null;
+     signal condition(neterror) set oncode(code);
+
+     return(-1);
+   end cleanup_and_signal;
+
+   append_chunk: proc(n) returns(bit(1));
      dcl n size_t;
 
-     do while(total_read < length(buffer));
-       n = c_read(conn.fd, buf_ptr + total_read,
-                length(buffer) - total_read);
-       /* handle read error */
-       if n < 0 then do;
-         signal condition(neterror) set oncode(c_get_errno());
-         return(n);
-       end;
-       /* handle eof */
-       if n = 0 then leave;
-       total_read = total_read + n;
+     /* guard against PL/I varying overflow */
+     if length(heap) + n > maxlength(heap) then do;
+       call cleanup_and_signal(ERR.TOOLARGE);
+       return('1'b);
      end;
-   end;
 
-   /* truncate buffer to actual bytes */
-   if total_read > 0 then
-     buffer = substr(buffer, 1, total_read);
-   return(total_read);
+     heap = heap || substr(chunk, 1, n);
+     return('0'b);
+   end append_chunk;
+
+   /* apply timeout once - net_read will re-apply per chunk */
+   call apply_timeout(conn, 1);
+   call init_heap;
+   if p = null then return(-1);
+
+   do while('1'b);
+     n = net_read(conn, chunk);
+     
+     if n = 0 then leave; 
+     if append_chunk(n) then leave;
+   end;
+   return(length(heap));
  end net_read_all;
 
  net_close: proc(conn) returns(fixed bin(31));

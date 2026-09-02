@@ -44,13 +44,13 @@
  ) returns(size_t);
 
 dcl net_read entry (
-    like conncb,
-    char(*)
-  ) returns(size_t);
+   like conncb,
+   char(*)
+ ) returns(size_t);
 
  dcl net_read_all entry (
    like conncb,
-   char(*)
+   pointer
  ) returns(size_t);
 
  dcl net_close entry (

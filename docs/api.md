@@ -54,8 +54,8 @@ Always declare as `dcl conn like conncb;`. It's `aligned based`.
 * **`net_send(conn, request, flags)`** (`source/net.pli:117`) — `c_send` (`include/c_bridge.inc:56` → `send`) with `MSG_FLAG`. Respects `write_timeout`. `flags=0` means no flags (`tests/send_recv.pli:21`).
 
 ### Reading
-* **`net_read(conn, buffer)`** (`source/net.pli:222`) — single `c_read` (`include/c_bridge.inc:72`) up to `length(buffer)`. Returns `0` on `EOF` (not `neterror`), `>0` bytes actually read and `buffer` is truncated to that length. Respects `read_timeout`.
-* **`net_read_all(conn, buffer)`** (`source/net.pli:244`) — loops `c_read` until `length(buffer)` filled or `EOF`.
+* **`net_read(conn, buffer)`** (`source/net.pli:222`) — single `c_read` (`include/c_bridge.inc:72`) up to `length(buffer)`. Returns `0` on `EOF` (not `neterror`), `>0` bytes actually read and `buffer` is truncated to that length. Respects `read_timeout`. Use for chunking (`examples/read_unknown.pli:38`).
+* **`net_read_all(conn, p)`** (`source/net.pli:248`) — modern-dynamic read until EOF, hides loop+`allocate`. `p` is `pointer` to `char(32767) varying based(p)` heap (`examples/read_unknown.pli:21` pattern, now inside). Caller `allocate` is done inside, caller `free` after (`free response;`). Returns `length(response)` (`0`=EOF), `>0` bytes, signals `neterror` `ERR.AGAIN`/`ERR.TIMEDOUT`/`ERR.TOOLARGE` (`32767` cap) `include/type_defs.inc:50`. Respects `read_timeout` once before loop. `net_read` stays for `poll`/`NONBLOCK` chunking.
 * **`net_recv(conn, response, flags)`** (`source/net.pli:142`) — `c_receive` (`include/c_bridge.inc:64` → `recv`) with `MSG_FLAG`. Respects `read_timeout`, truncates `response` on success (`tests/send_recv.pli:28`).
 
 ### Closing
@@ -128,13 +128,19 @@ Applied automatically in `net_read`/`net_read_all`/`net_recv` (`read_timeout`), 
  %include net;
    dcl conn like conncb;
    dcl req char(256) varying init('GET / HTTP/1.1' || CR_LF || 'Host: example.com' || CR_LF || CR_LF);
-   dcl resp char(4096);
+   dcl p pointer init(null);
+   dcl resp char(32767) varying based(p);
    dcl n size_t;
-   on condition(neterror) begin; display('neterror ' || oncode()); stop; end;
+   on condition(neterror) begin;
+     display('neterror ' || oncode()); /* ERR.TOOLARGE 75 if >32767 */
+     if p ¬= null then free resp;
+     stop;
+   end;
    call net_dial(conn, 'example.com:80', AF.INET);
    call net_write_all(conn, req);
-   n = net_read_all(conn, resp);
-   display(substr(resp,1,n));
+   n = net_read_all(conn, p); /* allocates heap, loops until EOF */
+   display(resp); /* varying already length=n, no substr */
+   free resp;
    call net_close(conn);
  end main;
 ```
