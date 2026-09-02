@@ -47,3 +47,5 @@ gcc -m32 -no-pie -z muldefs -o foo foo.o ../libnet.a -lprf /usr/lib/pli/alt/fhs.
 
 ## For AI — Token-Optimized Context
 Minimal read set: `AGENTS.md` + `include/type_defs.inc` + `include/net_base.inc` + `include/c_bridge.inc` + `docs/api.md:14` (`conncb`/constants). Add `source/net.pli:27` or `source/net_server.pli:25` only for the side you change. **Skip:** `dist/net.inc` (generated), `*.lst`/`*.o`/`libnet.a`, `tests/server.pli` unless testing server logic. `net.inc` is single re-export — don't read `net_errors`+`net_base`+`net_server` separately. Example `readme_usage.pli:1` + one test (`echo.pli` or `send_recv.pli`) is enough as few-shot.
+
+See `CHANGELOG.md:1` for breaking history.
