@@ -8,10 +8,10 @@
  * libnet reports ALL failures through conditions, never through return codes
  * (the idiomatic PL/I mechanism). Four conditions cover the failure space:
  *
- *   neterror    — a hard error;        oncode() holds the POSIX errno value.
- *   nettimeout  — read/write timeout, EAGAIN, or EINTR; oncode() = NET_TIMEOUT.
- *   netEOF      — the peer closed / end of stream;       oncode() = NET_EOF.
- *   netOverflow — the caller buffer filled mid-stream;   oncode() = NET_OVERFLOW.
+ *   net_error    — a hard error;        oncode() holds the POSIX errno value.
+ *   net_timeout  — read/write timeout, EAGAIN, or EINTR; oncode() = NET_TIMEOUT.
+ *   net_eof      — the peer closed / end of stream;       oncode() = NET_EOF.
+ *   net_overflow — the caller buffer filled mid-stream;   oncode() = NET_OVERFLOW.
  *
  * Callers establish handlers with ON and interrogate oncode() to recover the
  * detail. Returned values from libnet procedures are DATA only (byte counts,
@@ -24,10 +24,10 @@
 
 /* Shared types/constants are supplied by the master net.inc. */
 
-dcl neterror    condition;
-dcl nettimeout  condition;
-dcl netEOF      condition;
-dcl netOverflow condition;
+dcl net_error    condition;
+dcl net_timeout  condition;
+dcl net_eof      condition;
+dcl net_overflow condition;
 
 /* Translate the current oncode() into a human-readable string.
  * Returns a fixed char(32). Implemented entirely in PL/I — no C involved. */

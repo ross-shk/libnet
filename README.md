@@ -47,7 +47,7 @@ internal procedures, and descriptive constants.
 | Status codes | `NET_*` | `NET_EOF`, `NET_TIMEOUT`, `NET_OVERFLOW` (oncode sentinels) |
 | errno constants | `E*` | `EAGAIN`, `EBADF`, `ECONNREFUSED` (in `errno.inc`) |
 | POSIX mirror | as-is | `AF_INET`, `SOCK_STREAM`, `SHUT_WR`, `POLLIN` |
-| Conditions | lowercase | `neterror`, `nettimeout`, `netEOF`, `netOverflow` |
+| Conditions | lowercase | `net_error`, `net_timeout`, `net_eof`, `net_overflow` |
 | Internal pointers | role-based | `pconn` (connection handle), `psrv` (server handle) |
 | Internal helpers | lowercase verbs | `raise_err`, `raise_timeout`, `raise_eof`, `raise_overflow` |
 
@@ -59,7 +59,7 @@ internal procedures, and descriptive constants.
 | `include/type_defs.inc` | constants (`AF_*`, `SOCK_*`, `NET_*`), sizes |
 | `include/errno.inc` | POSIX errno as `%replace` named constants |
 | `include/c_bridge.inc` | by-value FFI declarations for the C bridge |
-| `include/net_errors.inc` | conditions (`neterror` / `nettimeout` / `netEOF` / `netOverflow`), `net_errtext` |
+| `include/net_errors.inc` | conditions (`net_error` / `net_timeout` / `net_eof` / `net_overflow`), `net_errtext` |
 | `include/net_base.inc` | client API (handle-based, multi-entry read/send) |
 | `include/net_server.inc` | server API (`net_listen` / `net_accept`) |
 | `include/net.inc` | master include — `%include net;` gets everything |
@@ -95,14 +95,14 @@ conn = net_open(AF_INET, SOCK_STREAM, 0);        /* library allocates (CONTROLLE
 call net_connect(conn, '127.0.0.1', 8090);
 call net_setopt(conn, NETOPT_KEEPALIVE, 1);      /* socket options */
 bytes = net_write(conn, 'hello');
-bytes = net_read_until(conn, buf, '0A'x);        /* read a line; netEOF ends it */
+bytes = net_read_until(conn, buf, '0A'x);        /* read a line; net_eof ends it */
 call net_close(conn);                            /* frees (CONTROLLED pop) */
 
 /* All failures arrive as conditions; oncode() recovers the detail. */
-on condition(neterror) begin; ... end;
-on condition(nettimeout) begin; ... end;
-on condition(netEOF) begin; ... end;
-on condition(netOverflow) begin; ... end;
+on condition(net_error) begin; ... end;
+on condition(net_timeout) begin; ... end;
+on condition(net_eof) begin; ... end;
+on condition(net_overflow) begin; ... end;
 ```
 
 ## Production readiness
@@ -117,8 +117,8 @@ or single-client server needs:
 - **nonblocking connect** — `net_connect_nb` + `net_connect_finish`
   (`EINPROGRESS` → poll writable → check `SO_ERROR`);
 - **UDP** — `net_sendto` / `net_recvfrom` datagram send/receive;
-- **errors** — conditions-only model (`neterror` / `nettimeout` / `netEOF` /
-  `netOverflow`), `net_strerror` (full errno text) and `net_errtext`; named
+- **errors** — conditions-only model (`net_error` / `net_timeout` / `net_eof` /
+  `net_overflow`), `net_strerror` (full errno text) and `net_errtext`; named
   errno constants (`errno.inc`);
 - **buffer safety** — `net_read_all` / `net_read_until` bound appends to the
   caller buffer (`maxlength`), so a long stream cannot overrun.
@@ -142,14 +142,14 @@ byte count, a delimiter position, a readiness mask, or a pointer handle.
 A procedure that can fail raises one of these conditions, intercepted with
 `ON`; `oncode()` recovers the detail.
 
-- `condition neterror` — hard error; `oncode()` = POSIX `errno`.
-- `condition nettimeout` — read/write timeout or `EAGAIN`/`EINTR`;
+- `condition net_error` — hard error; `oncode()` = POSIX `errno`.
+- `condition net_timeout` — read/write timeout or `EAGAIN`/`EINTR`;
   `oncode()` = `NET_TIMEOUT`.
-- `condition netEOF` — peer closed / end of stream; `oncode()` = `NET_EOF`.
-- `condition netOverflow` — caller buffer filled mid-stream;
+- `condition net_eof` — peer closed / end of stream; `oncode()` = `NET_EOF`.
+- `condition net_overflow` — caller buffer filled mid-stream;
   `oncode()` = `NET_OVERFLOW`.
 
-Note `net_poll` does **not** raise `nettimeout` on a timeout — a poll timeout
+Note `net_poll` does **not** raise `net_timeout` on a timeout — a poll timeout
 is the normal "nothing ready" result (returns 0).
 
 ## Status

@@ -14,16 +14,16 @@
     dcl msg   char(256);
     dcl n     fixed bin(31);
 
-    on condition(neterror) begin;
-       on condition(neterror) system;
+    on condition(net_error) begin;
+       on condition(net_error) system;
        put skip list('error:', net_errtext());
        stop;
-    end; /* on condition(neterror) */
-    on condition(nettimeout) begin;
-       on condition(nettimeout) system;
+    end; /* on condition(net_error) */
+    on condition(net_timeout) begin;
+       on condition(net_timeout) system;
        put skip list('timeout');
        stop;
-    end; /* on condition(nettimeout) */
+    end; /* on condition(net_timeout) */
 
     if hbound(sysparm) < 3 then do;
        put skip list('usage: client <host> <port> <message>');

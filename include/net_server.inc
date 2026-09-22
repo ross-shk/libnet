@@ -12,7 +12,7 @@
  *   call net_accept( srv, client )                  sets client handle
  *
  * Errors are reported through conditions (see net_errors.inc): both procedures
- * raise condition(neterror) on failure; net_listen also returns the null
+ * raise condition(net_error) on failure; net_listen also returns the null
  * handle. The server and each accepted client are CONTROLLED records owned by
  * this library; callers hold POINTER handles only.
  */
@@ -59,7 +59,7 @@ srv_raise_err: procedure;
    dcl e fixed bin(31);
    e = netc_errno();
    call netc_clearerr();
-   if e ^= 0 then signal condition(neterror) set oncode(e);
+   if e ^= 0 then signal condition(net_error) set oncode(e);
 end srv_raise_err;
 
 /*--------------------------------------------------------------------------*/
@@ -104,7 +104,7 @@ end net_listen;
 /* Accept one connection on the server handle. Allocates a client connection
  * and sets its handle in `client`.
  *
- * raises:   condition(neterror) on a failed accept; `client` is left unset. */
+ * raises:   condition(net_error) on a failed accept; `client` is left unset. */
 net_accept: procedure (server, client);
    dcl server pointer;
    dcl client pointer;

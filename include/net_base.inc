@@ -13,10 +13,10 @@
  *   readiness mask, or a pointer handle. A procedure that can fail raises
  *   one of these conditions, which the caller intercepts with ON:
  *
- *       condition(neterror)    hard error;          oncode() = errno
- *       condition(nettimeout)  timeout / EAGAIN;    oncode() = NET_TIMEOUT
- *       condition(netEOF)      peer closed;         oncode() = NET_EOF
- *       condition(netOverflow) caller buffer full;  oncode() = NET_OVERFLOW
+ *       condition(net_error)    hard error;          oncode() = errno
+ *       condition(net_timeout)  timeout / EAGAIN;    oncode() = NET_TIMEOUT
+ *       condition(net_eof)      peer closed;         oncode() = NET_EOF
+ *       condition(net_overflow) caller buffer full;  oncode() = NET_OVERFLOW
  *
  *   Pointer-returning procedures return the null handle on failure (after
  *   raising the appropriate condition).
@@ -88,27 +88,27 @@ dcl (addr, null, length, maxlength, min, index, substr, trim, fixed)
 /*--------------------------------------------------------------------------*/
 /* Internal error helpers (raise conditions — the only error channel)       */
 /*--------------------------------------------------------------------------*/
-/* Raise neterror with the current errno, unless 0. */
+/* Raise net_error with the current errno, unless 0. */
 raise_err: procedure;
    dcl e fixed bin(31);
    e = netc_errno();
    call netc_clearerr();
-   if e ^= 0 then signal condition(neterror) set oncode(e);
+   if e ^= 0 then signal condition(net_error) set oncode(e);
 end raise_err;
 
-/* Raise nettimeout (EAGAIN/EINTR/timeout expiry). */
+/* Raise net_timeout (EAGAIN/EINTR/timeout expiry). */
 raise_timeout: procedure;
-   signal condition(nettimeout) set oncode(NET_TIMEOUT);
+   signal condition(net_timeout) set oncode(NET_TIMEOUT);
 end raise_timeout;
 
-/* Raise netEOF (peer closed / end of stream). */
+/* Raise net_eof (peer closed / end of stream). */
 raise_eof: procedure;
-   signal condition(netEOF) set oncode(NET_EOF);
+   signal condition(net_eof) set oncode(NET_EOF);
 end raise_eof;
 
-/* Raise netOverflow (caller buffer exhausted mid-stream). */
+/* Raise net_overflow (caller buffer exhausted mid-stream). */
 raise_overflow: procedure;
-   signal condition(netOverflow) set oncode(NET_OVERFLOW);
+   signal condition(net_overflow) set oncode(NET_OVERFLOW);
 end raise_overflow;
 
 /*--------------------------------------------------------------------------*/
@@ -117,9 +117,9 @@ end raise_overflow;
 /* Allocate a connection (CONTROLLED push) and create a socket.
  *
  * returns:  a non-null POINTER handle on success;
- *           the null handle on failure (condition neterror raised).
+ *           the null handle on failure (condition net_error raised).
  *
- * raises:   condition(neterror) if the socket could not be created.
+ * raises:   condition(net_error) if the socket could not be created.
  *
  * family:   AF_INET / AF_INET6;  type: SOCK_STREAM / SOCK_DGRAM;
  *           proto: IPPROTO_TCP / IPPROTO_UDP / 0. */
@@ -154,7 +154,7 @@ end net_open;
 /*--------------------------------------------------------------------------*/
 /* Connect an opened connection to host:port.
  *
- * raises:   condition(neterror) on connect failure.
+ * raises:   condition(net_error) on connect failure.
  *
  * host is a host name or dotted quad; it is resolved via getaddrinfo. On
  * success the peer_* fields are filled. */
@@ -176,7 +176,7 @@ end net_connect;
 
 /* Resolve host:port ("127.0.0.1:8090" or hostname:port) and connect.
  *
- * raises:   condition(neterror) on a malformed host:port or connect failure. */
+ * raises:   condition(net_error) on a malformed host:port or connect failure. */
 net_dial: procedure (h, hostport, family);
    dcl h        pointer;
    dcl hostport char(*);
@@ -188,7 +188,7 @@ net_dial: procedure (h, hostport, family);
 
    colon = index(hostport, ':');
    if colon = 0 then do;
-      signal condition(neterror) set oncode(EINVAL);
+      signal condition(net_error) set oncode(EINVAL);
       return;
    end;
    hoststr = substr(hostport, 1, colon - 1);
@@ -213,7 +213,7 @@ net_close: procedure (h);
 end net_close;
 
 /* Shut down one direction of the connection.
- * raises:   condition(neterror) on failure. */
+ * raises:   condition(net_error) on failure. */
 net_shutdown: procedure (h, how);
    dcl h   pointer;
    dcl how fixed bin(31);
@@ -230,9 +230,9 @@ end net_shutdown;
  *
  * returns:  the number of bytes read (0 <= n <= buflen).
  *
- * raises:   condition(netEOF) if the peer closed the stream;
- *           condition(nettimeout) on timeout/EAGAIN;
- *           condition(neterror) on a hard error. */
+ * raises:   condition(net_eof) if the peer closed the stream;
+ *           condition(net_timeout) on timeout/EAGAIN;
+ *           condition(net_error) on a hard error. */
 net_read: procedure (h, buffer, buflen) returns (fixed bin(31));
    dcl h      pointer;
    dcl buffer char(*);
@@ -241,7 +241,7 @@ net_read: procedure (h, buffer, buflen) returns (fixed bin(31));
 
    pconn = h;
    if conn_view.fd <= 0 then do;
-      signal condition(neterror) set oncode(EBADF);
+      signal condition(net_error) set oncode(EBADF);
       return 0;
    end;
 
@@ -264,8 +264,8 @@ end net_read;
  * returns:  the total number of bytes read. EOF is the normal end, reported
  *           as the byte count accumulated so far (no condition).
  *
- * raises:   condition(nettimeout), condition(neterror), or
- *           condition(netOverflow) if the caller buffer filled before EOF. */
+ * raises:   condition(net_timeout), condition(net_error), or
+ *           condition(net_overflow) if the caller buffer filled before EOF. */
 net_read_all: entry (h, buffer) returns (fixed bin(31));
    dcl h      pointer;
    dcl buffer char(*);
@@ -305,9 +305,9 @@ end net_read_all;
  *
  * returns:  the position of the first delimiter in buffer (1..len).
  *
- * raises:   condition(netEOF) if the peer closed before a delimiter;
- *           condition(nettimeout), condition(neterror), or
- *           condition(netOverflow) if the caller buffer filled. */
+ * raises:   condition(net_eof) if the peer closed before a delimiter;
+ *           condition(net_timeout), condition(net_error), or
+ *           condition(net_overflow) if the caller buffer filled. */
 net_read_until: entry (h, buffer, delim) returns (fixed bin(31));
    dcl h      pointer;
    dcl buffer char(*);
@@ -353,8 +353,8 @@ end net_read_until;
  *
  * returns:  the number of bytes sent (0 <= n <= length(buffer)).
  *
- * raises:   condition(nettimeout) on timeout/EAGAIN;
- *           condition(neterror) on a hard error.
+ * raises:   condition(net_timeout) on timeout/EAGAIN;
+ *           condition(net_error) on a hard error.
  *
  * net_send / net_send_all / net_send_once are ENTRY points sharing the body
  * with the same RETURNS attributes. */
@@ -393,7 +393,7 @@ end net_send;
  *
  * returns:  the total number of bytes sent.
  *
- * raises:   condition(neterror) on a hard (non-EAGAIN) error. */
+ * raises:   condition(net_error) on a hard (non-EAGAIN) error. */
 net_send_all: entry (h, buffer) returns (fixed bin(31));
    dcl h      pointer;
    dcl buffer char(*);
@@ -425,7 +425,7 @@ end net_send_all;
  *
  * returns:  the number of bytes sent.
  *
- * raises:   condition(nettimeout) / condition(neterror). */
+ * raises:   condition(net_timeout) / condition(net_error). */
 net_send_once: entry (h, buffer, flags) returns (fixed bin(31));
    dcl h      pointer;
    dcl buffer char(*);
@@ -450,7 +450,7 @@ end net_send_once;
  * returns:  the ready mask (POLLIN/POLLOUT), or 0 on timeout. A timeout is
  *           NOT an error for poll — it is the normal "nothing ready" result.
  *
- * raises:   condition(neterror) on a hard error. */
+ * raises:   condition(net_error) on a hard error. */
 net_poll: procedure (h, events, ms) returns (fixed bin(31));
    dcl h      pointer;
    dcl events fixed bin(31);
@@ -464,7 +464,7 @@ net_poll: procedure (h, events, ms) returns (fixed bin(31));
 end net_poll;
 
 /* Set read/write timeouts (ms; 0 = blocking).
- * raises:   condition(neterror) on failure. */
+ * raises:   condition(net_error) on failure. */
 net_set_timeout: procedure (h, rto, wto);
    dcl h   pointer;
    dcl rto fixed bin(31);
@@ -482,7 +482,7 @@ net_set_timeout: procedure (h, rto, wto);
 end net_set_timeout;
 
 /* Enable or disable nonblocking I/O.
- * raises:   condition(neterror) on failure. */
+ * raises:   condition(net_error) on failure. */
 net_set_nonblocking: procedure (h, on);
    dcl h  pointer;
    dcl on bit(1);
@@ -499,7 +499,7 @@ end net_set_nonblocking;
 /*--------------------------------------------------------------------------*/
 /* Set a socket option by libnet code (NETOPT_REUSEADDR / NETOPT_KEEPALIVE /
  * NETOPT_NODELAY). value is 0 (off) or 1 (on).
- * raises:   condition(neterror) on failure. */
+ * raises:   condition(net_error) on failure. */
 net_setopt: procedure (h, opt, value);
    dcl h     pointer;
    dcl opt   fixed bin(31);
@@ -512,7 +512,7 @@ net_setopt: procedure (h, opt, value);
 end net_setopt;
 
 /* SO_LINGER: enable/disable with a timeout in seconds.
- * raises:   condition(neterror) on failure. */
+ * raises:   condition(net_error) on failure. */
 net_set_linger: procedure (h, on, seconds);
    dcl h       pointer;
    dcl on      fixed bin(31);
@@ -528,7 +528,7 @@ end net_set_linger;
 /* net_peer / net_local                                                      */
 /*--------------------------------------------------------------------------*/
 /* Fill ip/port with the peer (remote) address.
- * raises:   condition(neterror) on failure. */
+ * raises:   condition(net_error) on failure. */
 net_peer: procedure (h, ip, port);
    dcl h    pointer;
    dcl ip   char(*);
@@ -541,7 +541,7 @@ net_peer: procedure (h, ip, port);
 end net_peer;
 
 /* Fill ip/port with the local (bound) address.
- * raises:   condition(neterror) on failure. */
+ * raises:   condition(net_error) on failure. */
 net_local: procedure (h, ip, port);
    dcl h    pointer;
    dcl ip   char(*);
@@ -557,7 +557,7 @@ end net_local;
 /* net_resolve                                                               */
 /*--------------------------------------------------------------------------*/
 /* Resolve a host name (or dotted quad) to a dotted-quad string in ip.
- * raises:   condition(neterror) on resolution failure. */
+ * raises:   condition(net_error) on resolution failure. */
 net_resolve: procedure (host, ip);
    dcl host char(*);
    dcl ip   char(*);
@@ -586,7 +586,7 @@ end net_strerror;
  * calls net_connect_finish. No condition is raised for in-progress (it is
  * not an error).
  *
- * raises:   condition(neterror) on a hard connect failure. */
+ * raises:   condition(net_error) on a hard connect failure. */
 net_connect_nb: procedure (h, host, port);
    dcl h    pointer;
    dcl host char(*);
@@ -609,7 +609,7 @@ net_connect_nb: procedure (h, host, port);
 end net_connect_nb;
 
 /* Finalize a nonblocking connect after the fd became writable.
- * raises:   condition(neterror) if the connect ultimately failed. */
+ * raises:   condition(net_error) if the connect ultimately failed. */
 net_connect_finish: procedure (h);
    dcl h  pointer;
    dcl e  fixed bin(31);
@@ -623,7 +623,7 @@ net_connect_finish: procedure (h);
       return;
    end;
    if e ^= 0 then do;
-      signal condition(neterror) set oncode(e);
+      signal condition(net_error) set oncode(e);
       return;
    end;
    conn_view.is_connected = '1'b;
@@ -636,7 +636,7 @@ end net_connect_finish;
  *
  * returns:  the number of bytes sent.
  *
- * raises:   condition(nettimeout) on EAGAIN; condition(neterror) otherwise. */
+ * raises:   condition(net_timeout) on EAGAIN; condition(net_error) otherwise. */
 net_sendto: procedure (h, buffer, ip, port) returns (fixed bin(31));
    dcl h      pointer;
    dcl buffer char(*);
@@ -659,7 +659,7 @@ end net_sendto;
  *
  * returns:  the number of bytes received.
  *
- * raises:   condition(nettimeout) on EAGAIN; condition(neterror) otherwise. */
+ * raises:   condition(net_timeout) on EAGAIN; condition(net_error) otherwise. */
 net_recvfrom: procedure (h, buffer, ip, port) returns (fixed bin(31));
    dcl h      pointer;
    dcl buffer char(*);

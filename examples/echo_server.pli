@@ -19,17 +19,17 @@
     /* ON units are kept to a single action, and each re-arms the condition
      * so a failure inside the unit does not recurse (style guide). Errors
      * and timeouts abort; EOF is the normal end of the echo loop. */
-    on condition(neterror) begin;
-       on condition(neterror) system;
+    on condition(net_error) begin;
+       on condition(net_error) system;
        put skip list('net error, code=', oncode());
        stop;
-    end; /* on condition(neterror) */
-    on condition(nettimeout) begin;
-       on condition(nettimeout) system;
+    end; /* on condition(net_error) */
+    on condition(net_timeout) begin;
+       on condition(net_timeout) system;
        put skip list('net timeout');
        stop;
-    end; /* on condition(nettimeout) */
-    on condition(netEOF) done = '1'b;
+    end; /* on condition(net_timeout) */
+    on condition(net_eof) done = '1'b;
 
     /* listen on 127.0.0.1:8090 */
     server = net_listen(8090, 5);
@@ -40,7 +40,7 @@
     call net_accept(server, client);
     put skip list('client accepted');
 
-    /* echo loop: read a line (netEOF ends it), write it back */
+    /* echo loop: read a line (net_eof ends it), write it back */
     done = '0'b;
     do while (^done);
        got = net_read_until(client, line, '0A'x);   /* newline delimiter */

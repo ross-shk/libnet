@@ -10,15 +10,15 @@
     dcl ip   char(64);
     dcl host char(256);
 
-    on condition(neterror) begin;
-       on condition(neterror) system;
+    on condition(net_error) begin;
+       on condition(net_error) system;
        put skip list('could not resolve:', net_errtext());
        stop;
-    end; /* on condition(neterror) */
+    end; /* on condition(net_error) */
 
     if hbound(sysparm) < 1 then host = 'localhost';
     else host = sysparm(1);
 
-    call net_resolve(host, ip);       /* raises neterror on failure */
+    call net_resolve(host, ip);       /* raises net_error on failure */
     put skip list(trim(host), '->', trim(ip));
  end resolve;

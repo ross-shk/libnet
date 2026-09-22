@@ -28,11 +28,11 @@
 %replace POLLOUT      by 2;
 
 /* --- condition oncode sentinels (set via SIGNAL ... SET ONCODE) ------------- */
-/* These are the oncode values carried by the nettimeout / netEOF /
- * netOverflow conditions. POSIX errno (always positive) is carried by the
- * neterror condition. They are NOT return codes: libnet reports all failures
+/* These are the oncode values carried by the net_timeout / net_eof /
+ * net_overflow conditions. POSIX errno (always positive) is carried by the
+ * net_error condition. They are NOT return codes: libnet reports all failures
  * through conditions (see net_errors.inc). */
-%replace NET_EOF       by -2;   /* peer closed / end of stream (netEOF)    */
+%replace NET_EOF       by -2;   /* peer closed / end of stream (net_eof)    */
 %replace NET_TIMEOUT   by -3;   /* read/write timeout or EAGAIN/EINTR      */
 %replace NET_OVERFLOW  by -4;   /* caller buffer exhausted mid-stream      */
 
