@@ -8,11 +8,13 @@
  *          library-owned connection and returns its handle.
  *
  * Calling sequence:
- *   srv = net_listen( port, backlog )               returns pointer
- *   rc  = net_accept( srv, client )                 returns fixed bin(31)
+ *   srv = net_listen( port, backlog )               returns pointer (null on fail)
+ *   call net_accept( srv, client )                  sets client handle
  *
- * The server and each accepted client are CONTROLLED records owned by this
- * library; callers hold POINTER handles only.
+ * Errors are reported through conditions (see net_errors.inc): both procedures
+ * raise condition(neterror) on failure; net_listen also returns the null
+ * handle. The server and each accepted client are CONTROLLED records owned by
+ * this library; callers hold POINTER handles only.
  */
 
 /* Shared declarations are supplied by the master net.inc. */
@@ -100,8 +102,10 @@ end net_listen;
 /* net_accept                                                                */
 /*--------------------------------------------------------------------------*/
 /* Accept one connection on the server handle. Allocates a client connection
- * and returns its handle via `client`; NET_OK or NET_ERR. */
-net_accept: procedure (server, client) returns (fixed bin(31));
+ * and sets its handle in `client`.
+ *
+ * raises:   condition(neterror) on a failed accept; `client` is left unset. */
+net_accept: procedure (server, client);
    dcl server pointer;
    dcl client pointer;
    dcl cfd    fixed bin(31);
@@ -110,7 +114,7 @@ net_accept: procedure (server, client) returns (fixed bin(31));
    cfd = netc_accept(srv_view.fd);
    if cfd < 0 then do;
       call srv_raise_err();
-      return NET_ERR;
+      return;
    end;
 
    allocate cli_rec;
@@ -120,5 +124,4 @@ net_accept: procedure (server, client) returns (fixed bin(31));
    cli_rec.write_timeout = 0;
    cli_rec.in_len        = 0;
    client = addr(cli_rec);
-   return NET_OK;
 end net_accept;

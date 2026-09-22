@@ -13,7 +13,6 @@
     dcl reply char(1024);
     dcl msg   char(256);
     dcl n     fixed bin(31);
-    dcl rc    fixed bin(31);
 
     on condition(neterror) begin;
        on condition(neterror) system;
@@ -34,14 +33,13 @@
 
     conn = net_open(AF_INET, SOCK_STREAM, 0);
     if conn = null() then stop;
-    rc = net_connect(conn, sysparm(1), fixed(sysparm(2)));
-    if rc < 0 then stop;
+    call net_connect(conn, sysparm(1), fixed(sysparm(2)));
 
     n = net_write(conn, msg);
     put skip list('sent', n, 'bytes');
 
     n = net_read_all(conn, reply);
-    put skip list('reply:', substr(reply, 1, max(n, 0)));
+    put skip list('reply:', substr(reply, 1, n));
 
     call net_close(conn);
     put skip list('done');

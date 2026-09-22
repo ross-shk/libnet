@@ -8,7 +8,6 @@
     %include net;
 
     dcl ip   char(64);
-    dcl rc   fixed bin(31);
     dcl host char(256);
 
     on condition(neterror) begin;
@@ -20,7 +19,6 @@
     if hbound(sysparm) < 1 then host = 'localhost';
     else host = sysparm(1);
 
-    rc = net_resolve(host, ip);
-    if rc = NET_OK then put skip list(trim(host), '->', trim(ip));
-    else put skip list('resolution failed');
+    call net_resolve(host, ip);       /* raises neterror on failure */
+    put skip list(trim(host), '->', trim(ip));
  end resolve;
