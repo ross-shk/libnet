@@ -28,10 +28,11 @@
 %replace POLLOUT      by 2;
 
 /* --- libnet-internal status codes (distinct from errno) -------------------- */
-%replace NET_OK       by  0;
-%replace NET_ERR      by -1;
-%replace NET_EOF      by -2;
-%replace NET_TIMEOUT  by -3;
+%replace NET_OK        by  0;   /* success (also the count 0 for writes) */
+%replace NET_ERR       by -1;   /* hard error; condition neterror raised */
+%replace NET_EOF       by -2;   /* peer closed / end of stream          */
+%replace NET_TIMEOUT   by -3;   /* read/write timeout or EAGAIN/EINTR   */
+%replace NET_OVERFLOW  by -4;   /* caller buffer exhausted mid-stream   */
 
 /* --- socket option codes for net_setopt (mapped to syscalls in C) ---------- */
 %replace NETOPT_REUSEADDR by 0;   /* SO_REUSEADDR */

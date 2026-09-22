@@ -7,6 +7,19 @@
  *          client API. Callers hold only a POINTER handle and never see the
  *          layout — the classic PL/I "task context" pattern.
  *
+ * Return conventions (read this first):
+ *   - A non-negative return is a count / success (bytes read/written, a
+ *     readiness mask, NET_OK=0).
+ *   - A negative return is ALWAYS a status constant, never a count:
+ *       NET_ERR      = -1  hard error (condition neterror raised)
+ *       NET_EOF      = -2  peer closed / end of stream
+ *       NET_TIMEOUT  = -3  timeout or EAGAIN/EINTR (nettimeout raised)
+ *       NET_OVERFLOW = -4  caller buffer exhausted mid-stream
+ *   - Functions that can fail also raise a condition (neterror / nettimeout)
+ *     in addition to returning a negative status. Callers may handle either
+ *     channel; ON-units are the recommended production pattern.
+ *   - Pointer-returning functions return the null handle on failure.
+ *
  * Calling sequence (all procedures take a handle produced by net_open):
  *   h  = net_open( family, type, proto )            returns pointer
  *   rc = net_connect( h, host, port )               returns fixed bin(31)
@@ -90,8 +103,15 @@ end raise_timeout;
 /*--------------------------------------------------------------------------*/
 /* net_open                                                                  */
 /*--------------------------------------------------------------------------*/
-/* Allocate a connection (CONTROLLED push), create the socket, return a
- * pointer handle. On failure raise neterror and return the null handle. */
+/* Allocate a connection (CONTROLLED push) and create a socket.
+ *
+ * returns:  a non-null POINTER handle on success;
+ *           the null handle on failure (condition neterror also raised).
+ *
+ * raises:   condition(neterror) if the socket could not be created.
+ *
+ * family:   AF_INET / AF_INET6;  type: SOCK_STREAM / SOCK_DGRAM;
+ *           proto: IPPROTO_TCP / IPPROTO_UDP / 0. */
 net_open: procedure (family, type, proto) returns (pointer);
    dcl family fixed bin(31);
    dcl type   fixed bin(31);
@@ -121,7 +141,14 @@ end net_open;
 /*--------------------------------------------------------------------------*/
 /* net_connect / net_dial                                                    */
 /*--------------------------------------------------------------------------*/
-/* Connect an opened connection to host:port. Fills peer_* on success. */
+/* Connect an opened connection to host:port.
+ *
+ * returns:  NET_OK (0) on success (peer_* filled);
+ *           NET_ERR (-1) on failure (condition neterror also raised).
+ *
+ * raises:   condition(neterror) on connect failure.
+ *
+ * host is a host name or dotted quad; it is resolved via getaddrinfo. */
 net_connect: procedure (h, host, port) returns (fixed bin(31));
    dcl h    pointer;
    dcl host char(*);
@@ -190,9 +217,15 @@ end net_shutdown;
 /*--------------------------------------------------------------------------*/
 /* net_read family (multi-entry parametrization)                             */
 /*--------------------------------------------------------------------------*/
-/* Read up to buflen bytes. Returns bytes read, NET_EOF (peer closed),
- * NET_TIMEOUT, or NET_ERR. net_read_all / net_read_until are ENTRY points
- * sharing this body. */
+/* Read up to buflen bytes into buffer.
+ *
+ * returns:  the number of bytes read (0 <= n <= buflen) on success;
+ *           NET_EOF (-2) if the peer closed the stream;
+ *           NET_TIMEOUT (-3) on timeout/EAGAIN;
+ *           NET_ERR (-1) on a hard error (condition neterror also raised).
+ *
+ * raises:   condition(neterror) on a hard error;
+ *           condition(nettimeout) on a timeout/EAGAIN. */
 net_read: procedure (h, buffer, buflen) returns (fixed bin(31));
    dcl h      pointer;
    dcl buffer char(*);
@@ -218,9 +251,17 @@ net_read: procedure (h, buffer, buflen) returns (fixed bin(31));
    return got;
 end net_read;
 
-/* Read repeatedly until the peer closes or an error/timeout. Appends all
- * received bytes to buffer via the variable-length slice idiom. */
-net_read_all: entry (h, buffer);
+/* Read repeatedly until the peer closes or an error/timeout, appending all
+ * received bytes to buffer.
+ *
+ * returns:  the total number of bytes read on success;
+ *           NET_TIMEOUT (-3), NET_ERR (-1), or NET_OVERFLOW (-4) if the
+ *           caller buffer filled before EOF;
+ *           never returns NET_EOF (EOF is the normal end, reported as the
+ *           byte count accumulated so far).
+ *
+ * raises:   condition(neterror) / condition(nettimeout) as for net_read. */
+net_read_all: entry (h, buffer) returns (fixed bin(31));
    dcl h      pointer;
    dcl buffer char(*);
    dcl tmp    char(NET_BUF_CAP);
@@ -234,7 +275,7 @@ net_read_all: entry (h, buffer);
    done  = '0'b;
    do while (^done);
       cap = min(NET_BUF_CAP, maxlength(buffer) - total);
-      if cap <= 0 then return total;  /* caller buffer full */
+      if cap <= 0 then return NET_OVERFLOW;  /* caller buffer full */
       got = netc_recv(conn_view.fd, tmp, cap, 0);
       if got = 0 then do;             /* EOF */
          done = '1'b;
@@ -254,9 +295,17 @@ net_read_all: entry (h, buffer);
    return total;
 end net_read_all;
 
-/* Read until a delimiter character is seen. Returns bytes read up to and
- * including the delimiter, or NET_EOF/NET_TIMEOUT/NET_ERR. */
-net_read_until: entry (h, buffer, delim);
+/* Read until a delimiter character is seen, appending received bytes to
+ * buffer.
+ *
+ * returns:  the position of the first delimiter in buffer (1..len) on
+ *           success;
+ *           NET_EOF (-2) if the peer closed before a delimiter;
+ *           NET_TIMEOUT (-3), NET_ERR (-1), or NET_OVERFLOW (-4) if the
+ *           caller buffer filled before a delimiter.
+ *
+ * raises:   condition(neterror) / condition(nettimeout) as for net_read. */
+net_read_until: entry (h, buffer, delim) returns (fixed bin(31));
    dcl h      pointer;
    dcl buffer char(*);
    dcl delim  char(1);
@@ -272,7 +321,7 @@ net_read_until: entry (h, buffer, delim);
    done  = '0'b;
    do while (^done);
       cap = min(NET_BUF_CAP, maxlength(buffer) - total);
-      if cap <= 0 then return total;  /* caller buffer full, no delimiter */
+      if cap <= 0 then return NET_OVERFLOW;  /* caller buffer full, no delimiter */
       got = netc_recv(conn_view.fd, tmp, cap, 0);
       if got = 0 then return NET_EOF;
       if got < 0 then do;
@@ -294,7 +343,16 @@ end net_read_until;
 /*--------------------------------------------------------------------------*/
 /* net_write / net_send family (multi-entry parametrization)                 */
 /*--------------------------------------------------------------------------*/
-/* Send buffer verbatim. Returns bytes sent, or NET_ERR/NET_TIMEOUT. */
+/* Send buffer verbatim (flags = 0).
+ *
+ * returns:  the number of bytes sent (0 <= n <= length(buffer)) on success;
+ *           NET_TIMEOUT (-3) on timeout/EAGAIN;
+ *           NET_ERR (-1) on a hard error (condition neterror also raised).
+ *
+ * raises:   condition(neterror) / condition(nettimeout).
+ *
+ * net_send / net_send_all / net_send_once are ENTRY points sharing the body
+ * with the same RETURNS attributes. */
 net_write: procedure (h, buffer) returns (fixed bin(31));
    dcl h      pointer;
    dcl buffer char(*);

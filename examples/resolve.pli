@@ -1,0 +1,26 @@
+ /* resolve.pli — DNS resolution example for libnet.
+    Module:  resolve
+    Purpose: show how net_resolve maps a host name to a dotted-quad string.
+    Usage:   resolve <host>
+    Requires the pli-llvm wishlist (see WISHLIST.md); blocks today. */
+
+ resolve: procedure options(main);
+    %include net;
+
+    dcl ip   char(64);
+    dcl rc   fixed bin(31);
+    dcl host char(256);
+
+    on condition(neterror) begin;
+       on condition(neterror) system;
+       put skip list('could not resolve:', net_errtext());
+       stop;
+    end; /* on condition(neterror) */
+
+    if hbound(sysparm) < 1 then host = 'localhost';
+    else host = sysparm(1);
+
+    rc = net_resolve(host, ip);
+    if rc = NET_OK then put skip list(trim(host), '->', trim(ip));
+    else put skip list('resolution failed');
+ end resolve;

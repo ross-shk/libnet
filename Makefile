@@ -57,10 +57,13 @@ build-prog: libnet.a
 	$(PLIC) $(PLIFLAGS) -c $(SRC) $(INC) -o $(OUT).o
 	$(CC) -o $(OUT) $(OUT).o libnet.a $(RTLIB)
 
-# Diagnostic: attempt to compile the example and show the wishlist gap.
+# Diagnostic: attempt to compile each example and show the wishlist gap.
+EXAMPLES = examples/echo_server.pli examples/client.pli examples/resolve.pli
 example: libnet.a
-	@echo "== compiling examples/echo_server.pli (expect wishlist gaps) =="
-	-$(PLIC) $(PLIFLAGS) -c examples/echo_server.pli $(INC) -o /tmp/echo_server.o
+	@for e in $(EXAMPLES); do \
+	  echo "== compiling $$e (expect wishlist gaps) =="; \
+	  -$(PLIC) $(PLIFLAGS) -c $$e $(INC) -o /tmp/$$(basename $$e .pli).o; \
+	done
 
 install: libnet.a $(DIST_INC)
 	install -d $(DESTDIR)$(INCDIR) $(DESTDIR)$(LIBDIR) $(DESTDIR)$(PKGDIR)

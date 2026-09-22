@@ -63,8 +63,11 @@ internal procedures, and descriptive constants.
 | `include/net_base.inc` | client API (handle-based, multi-entry read/send) |
 | `include/net_server.inc` | server API (`net_listen` / `net_accept`) |
 | `include/net.inc` | master include — `%include net;` gets everything |
+| `docs/api.md` | structured reference of every function (signature, returns, raises) |
 | `tests/c_bridge.c` | C regression test for the bridge bindings |
 | `examples/echo_server.pli` | echo server + client demo |
+| `examples/client.pli` | minimal TCP client |
+| `examples/resolve.pli` | DNS resolution demo |
 
 ## Build
 

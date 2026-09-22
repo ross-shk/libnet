@@ -1,0 +1,48 @@
+ /* client.pli — minimal TCP client for libnet.
+    Module:  client
+    Purpose: connect to a host:port, write a line, read a reply, close.
+             A compact, single-purpose example of the handle-based API and
+             ON-condition error model.
+    Usage:   client <host> <port> <message>
+    Requires the pli-llvm wishlist (see WISHLIST.md); blocks today. */
+
+ client: procedure options(main);
+    %include net;
+
+    dcl conn pointer;
+    dcl reply char(1024);
+    dcl msg   char(256);
+    dcl n     fixed bin(31);
+    dcl rc    fixed bin(31);
+
+    on condition(neterror) begin;
+       on condition(neterror) system;
+       put skip list('error:', net_errtext());
+       stop;
+    end; /* on condition(neterror) */
+    on condition(nettimeout) begin;
+       on condition(nettimeout) system;
+       put skip list('timeout');
+       stop;
+    end; /* on condition(nettimeout) */
+
+    if hbound(sysparm) < 3 then do;
+       put skip list('usage: client <host> <port> <message>');
+       stop;
+    end;
+    msg = sysparm(3);
+
+    conn = net_open(AF_INET, SOCK_STREAM, 0);
+    if conn = null() then stop;
+    rc = net_connect(conn, sysparm(1), fixed(sysparm(2)));
+    if rc < 0 then stop;
+
+    n = net_write(conn, msg);
+    put skip list('sent', n, 'bytes');
+
+    n = net_read_all(conn, reply);
+    put skip list('reply:', substr(reply, 1, max(n, 0)));
+
+    call net_close(conn);
+    put skip list('done');
+ end client;
