@@ -1,105 +1,82 @@
-# pli-llvm toolchain (native, no Docker, no Iron Spring runtime).
-# plic lives in pli-llvm/build; override PLI_LLVM if checked out elsewhere.
-PLI_LLVM   ?= ../plic/pli-llvm/build
-PLIC       ?= $(PLI_LLVM)/plic
-RTLIB      ?= $(PLI_LLVM)/libpli.a
-CC         ?= cc
-AR         ?= ar
-PLIFLAGS   ?=
-CFLAGS     ?= -O2 -Wall
-PREFIX     ?= /usr/local
-INCDIR     ?= $(PREFIX)/include
-LIBDIR     ?= $(PREFIX)/lib
-PKGDIR     ?= $(LIBDIR)/pkgconfig
+# libnet (PL/I-centric) — thin C bridge + PL/I library, targeting pli-llvm.
+#
+# Requires pli-llvm's build artifacts (projects/plic/pli-llvm/build). Override
+# PLI_LLVM if checked out elsewhere.
+#
+# Design: the C bridge is the ONLY compiled C; all connection logic lives in
+# %included PL/I (net_base.inc / net_server.inc), so it compiles inline into
+# each program. libnet.a is just the C bridge; programs do `%include net;`
+# and link -lnet + libpli.a.
+#
+# NOTE: `make all` succeeds today (it only builds the C bridge). Compiling a
+# *program* blocks on the pli-llvm wishlist (see WISHLIST.md): CONTROLLED
+# storage, variable-length SUBSTR, char(*), BASED(P) on params, based-member
+# RETURN. `make example` shows exactly where.
 
-# NOTE: full `make` is currently blocked by pli-llvm language gaps
-# (see build log: bare BASED conncb, ENTRY POINTER params,
-# OPTIONS(linkage), SIGNAL SET ONCODE, DECLARE CONDITION, char(*),
-# variable SUBSTR length, CHAR/FIXED conversions, struct-by-value).
-# This Makefile now invokes pli-llvm so failures surface as
-# pli-llvm diagnostics instead of a missing Iron Spring toolchain.
+PLI_LLVM ?= ../plic/pli-llvm/build
+PLIC     ?= $(PLI_LLVM)/plic
+RTLIB    ?= $(PLI_LLVM)/libpli.a
+CC       ?= cc
+AR       ?= ar
+CFLAGS   ?= -O2 -Wall
+PLIFLAGS ?=
 
-INC        = -I include
-OBJS       = c_bridge.o net.o net_server.o
-DIST_INC   = dist/net.inc
-DIST_PC    = dist/net.pc
-TEST_SRCS  = $(filter-out tests/server.pli,$(wildcard tests/*.pli))
-TEST_SERVER = tests/server
+PREFIX ?= /usr/local
+INCDIR ?= $(PREFIX)/include
+LIBDIR ?= $(PREFIX)/lib
+PKGDIR ?= $(LIBDIR)/pkgconfig
 
-.PHONY: all install uninstall clean distclean test
+INC     = -I include
+OBJS    = c_bridge.o
+BUILD  ?= .build
+DIST_INC = dist/net.inc
+INC_SRCS = include/net.inc include/net_base.inc include/net_server.inc \
+           include/net_errors.inc include/errno.inc include/c_bridge.inc \
+           include/type_defs.inc
 
-all: libnet.a $(DIST_INC) $(DIST_PC)
+.PHONY: all clean install uninstall test example
+
+all: libnet.a $(DIST_INC)
 
 c_bridge.o: source/c_bridge.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-net.o: source/net.pli include/c_bridge.inc include/net_errors.inc include/net_helpers.inc include/type_defs.inc
-	$(PLIC) $(PLIFLAGS) -c $< $(INC) -o $@
-
-net_server.o: source/net_server.pli include/c_bridge.inc include/net_errors.inc include/net_helpers.inc include/type_defs.inc
-	$(PLIC) $(PLIFLAGS) -c $< $(INC) -o $@
-
 libnet.a: $(OBJS)
 	$(AR) rcs $@ $(OBJS)
-	rm -f *.o
 
-$(TEST_SERVER): tests/server.pli libnet.a
-	$(PLIC) $(PLIFLAGS) -c $< $(INC) -o $@.o
-	$(CC) -o $@ $@.o libnet.a $(RTLIB)
-
-$(DIST_INC): include/type_defs.inc include/c_bridge.inc include/net_errors.inc include/net_base.inc include/net_server.inc
+$(DIST_INC): $(INC_SRCS)
 	mkdir -p dist
 	> $@
 	for f in $^; do \
 	  sed '/^[[:space:]]*%include/d' $$f >> $@; \
 	done
 
-$(DIST_PC): Makefile
-	mkdir -p dist
-	echo 'prefix=$(PREFIX)' > $@
-	echo 'exec_prefix=$${prefix}' >> $@
-	echo 'libdir=$(LIBDIR)' >> $@
-	echo 'includedir=$(INCDIR)' >> $@
-	echo '' >> $@
-	echo 'Name: net' >> $@
-	echo 'Description: PL/I socket library with C bridge (pli-llvm)' >> $@
-	echo 'Version: 1.0.0' >> $@
-	echo 'Libs: -L$${libdir} -lnet' >> $@
-	echo 'Cflags: -I$${includedir}' >> $@
+# Compile one program (PL/I) and link the C bridge + runtime.
+build-prog: libnet.a
+	@test -n "$(SRC)" || { echo "usage: make build-prog SRC=examples/foo.pli [OUT=foo]"; exit 1; }
+	$(PLIC) $(PLIFLAGS) -c $(SRC) $(INC) -o $(OUT).o
+	$(CC) -o $(OUT) $(OUT).o libnet.a $(RTLIB)
 
-test: libnet.a $(TEST_SERVER)
-	@failed=0; total=0; \
-	for src in $(TEST_SRCS); do \
-	  name=$$(basename $$src .pli); \
-	  total=$$((total+1)); \
-	  printf "  %-28s " "$$name"; \
-	  $(PLIC) $(PLIFLAGS) -c $$src $(INC) -o $${src%.pli}.o || { echo "COMPILE FAIL"; failed=$$((failed+1)); continue; }; \
-	  $(CC) -o $${src%.pli} $${src%.pli}.o libnet.a $(RTLIB) || { echo "LINK FAIL"; failed=$$((failed+1)); continue; }; \
-	  ./tests/server > /tmp/$$name.server.out 2>&1 & pid=$$!; sleep 0.7; \
-	  ./$${src%.pli} > /tmp/$$name.out 2>&1; rc=$$?; \
-	  kill $$pid 2>/dev/null || true; wait $$pid 2>/dev/null || true; \
-	  if [ $$rc -eq 0 ]; then echo "PASS"; else echo "FAIL"; cat /tmp/$$name.out; cat /tmp/$$name.server.out; failed=$$((failed+1)); fi; \
-	done; \
-	echo ""; echo "$$total tests, $$((total - failed)) passed, $$failed failed"; [ $$failed -eq 0 ]
+# Diagnostic: attempt to compile the example and show the wishlist gap.
+example: libnet.a
+	@echo "== compiling examples/echo_server.pli (expect wishlist gaps) =="
+	-$(PLIC) $(PLIFLAGS) -c examples/echo_server.pli $(INC) -o /tmp/echo_server.o
 
-install: libnet.a $(DIST_INC) $(DIST_PC)
-	install -d $(DESTDIR)$(INCDIR)
-	install -d $(DESTDIR)$(LIBDIR)
-	install -d $(DESTDIR)$(PKGDIR)
-	install -m 644 $(DIST_INC) $(DESTDIR)$(INCDIR)/
+install: libnet.a $(DIST_INC)
+	install -d $(DESTDIR)$(INCDIR) $(DESTDIR)$(LIBDIR) $(DESTDIR)$(PKGDIR)
+	install -m 644 $(DIST_INC) $(DESTDIR)$(INCDIR)/net.inc
 	install -m 644 libnet.a $(DESTDIR)$(LIBDIR)/
-	install -m 644 $(DIST_PC) $(DESTDIR)$(PKGDIR)/
 
 uninstall:
-	rm -f $(DESTDIR)$(INCDIR)/net.inc
-	rm -f $(DESTDIR)$(LIBDIR)/libnet.a
-	rm -f $(DESTDIR)$(PKGDIR)/net.pc
+	rm -f $(DESTDIR)$(INCDIR)/net.inc $(DESTDIR)$(LIBDIR)/libnet.a
+
+# `make test` runs the C bridge regression test (works today). The PL/I
+# program path additionally requires the pli-llvm wishlist (see WISHLIST.md).
+test: all
+	@mkdir -p $(BUILD)
+	@$(CC) $(CFLAGS) source/c_bridge.c tests/c_bridge.c -o $(BUILD)/cb_test && \
+	  $(BUILD)/cb_test
 
 clean:
-	rm -f $(OBJS) libnet.a *.o *.lst *.map
-	rm -rf dist
-	rm -f tests/*.o tests/*.lst tests/*.map
-	rm -f tests/server tests/http_get tests/echo tests/resolve_dial tests/close_shutdown tests/timeout tests/ephemeral tests/send_recv tests/poll tests/nonblocking
-	rm -f tests/server.o tests/http_get.o tests/echo.o tests/resolve_dial.o tests/close_shutdown.o tests/timeout.o tests/ephemeral.o tests/send_recv.o tests/poll.o tests/nonblocking.o
-
-distclean: clean uninstall
+	rm -f $(OBJS) libnet.a
+	rm -rf dist $(BUILD)

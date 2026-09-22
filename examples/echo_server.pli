@@ -1,0 +1,59 @@
+ /* echo_server.pli — echo server + client demo for libnet (PL/I-centric).
+    Module:  echo_server
+    Purpose: demonstrate the handle-based API and ON-condition model. The
+             server listens on 127.0.0.1:8090, accepts one client, and echoes
+             back each line it reads.
+    Usage:   echo_server            (blocks until a client connects)
+    Requires the pli-llvm wishlist (see WISHLIST.md); blocks today.
+ */
+
+ echo_server: procedure options(main);
+    %include net;
+
+    dcl server pointer;
+    dcl client pointer;
+    dcl line    char(1024);
+    dcl got     fixed bin(31);
+    dcl rc      fixed bin(31);
+    dcl done    bit(1);
+
+    /* ON units are kept to a single action, and each re-arms ERROR so a
+     * failure inside the unit does not recurse (style guide). */
+    on condition(neterror) begin;
+       on condition(neterror) system;
+       put skip list('net error, code=', oncode());
+       stop;
+    end; /* on condition(neterror) */
+    on condition(nettimeout) begin;
+       on condition(nettimeout) system;
+       put skip list('net timeout');
+       stop;
+    end; /* on condition(nettimeout) */
+
+    /* listen on 127.0.0.1:8090 */
+    server = net_listen(8090, 5);
+    if server = null() then stop;
+    put skip list('listening on 8090');
+
+    /* accept one client */
+    rc = net_accept(server, client);
+    if rc < 0 then stop;
+    put skip list('client accepted');
+
+    /* echo loop: read a line, write it back, until the peer closes */
+    done = '0'b;
+    do while (^done);
+       got = net_read_until(client, line, '0A'x);   /* newline delimiter */
+       if got < 0 then do;
+          done = '1'b;
+       end;
+       else do;
+          rc = net_write(client, substr(line, 1, got));
+          if rc < 0 then done = '1'b;
+       end;
+    end; /* do while */
+
+    call net_close(client);
+    call net_close(server);
+    put skip list('server done');
+ end echo_server;

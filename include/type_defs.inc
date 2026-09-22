@@ -1,78 +1,46 @@
-/* Copyright 2026 Ross Shkurat - Apache-2.0, see LICENSE */
+/* type_defs.inc — libnet shared types and constants.
+ *
+ * Module:  type_defs
+ * Purpose: socket-domain constants, libnet status codes, and buffer
+ *          capacities, shared by the C bridge declarations and the PL/I
+ *          client/server libraries.
+ *
+ * The connection object is owned by the library (CONTROLLED storage); callers
+ * hold only a POINTER handle. The structure layout is private to the library
+ * and is declared in net_base.inc / net_server.inc, not here.
+ */
 
- %process options(extended_replace);
+/* --- address family / socket type / protocol (POSIX) ---------------------- */
+%replace AF_INET      by  2;
+%replace AF_INET6     by 10;
+%replace SOCK_STREAM  by  1;
+%replace SOCK_DGRAM   by  2;
+%replace IPPROTO_TCP  by  6;
+%replace IPPROTO_UDP  by 17;
 
- %replace sock_fd_t by "fixed bin(31)";  /* signed, -1 error */
- %replace size_t by "fixed bin(31)";  
- %replace port_t by "fixed bin(31)";  
- %replace backlog_t by "fixed bin(15)";  /* small, was 31 */
- %replace flags_t by "fixed bin(31)";
- %replace shut_how_t by "fixed bin(31)";
- %replace buffer_t by "char(2045)";  /* unused, consider 4096 */
+/* --- shutdown(2) directions ------------------------------------------------ */
+%replace SHUT_RD      by 0;
+%replace SHUT_WR      by 1;
+%replace SHUT_RDWR    by 2;
 
- %replace CR_LF by "'0D0A'x";
- %replace MAX_HOST_LEN by "256";  /* rfc 1035 */
- %replace MAX_IP_LEN by "46";  /* ipv6 max 45 + nul */
- %replace MAX_VARYING by "32767"; /* max for varying char */
+/* --- poll(2) event bits (mirrored in c_bridge.c) --------------------------- */
+%replace POLLIN       by 1;
+%replace POLLOUT      by 2;
 
- dcl 1 AF static,
-       2 UNSPEC fixed bin(31) init(0),   /* AF_UNSPEC */
-       2 UNIX   fixed bin(31) init(1),   /* AF_UNIX */
-       2 INET   fixed bin(31) init(2),   /* AF_INET */
-       2 INET6  fixed bin(31) init(10);  /* AF_INET6 */
+/* --- libnet-internal status codes (distinct from errno) -------------------- */
+%replace NET_OK       by  0;
+%replace NET_ERR      by -1;
+%replace NET_EOF      by -2;
+%replace NET_TIMEOUT  by -3;
 
- dcl 1 SOCK_TYPE static,
-       2 STREAM fixed bin(31) init(1),   /* SOCK_STREAM */
-       2 DGRAM  fixed bin(31) init(2),   /* SOCK_DGRAM */
-       2 RAW    fixed bin(31) init(3);   /* SOCK_RAW */
+/* --- socket option codes for net_setopt (mapped to syscalls in C) ---------- */
+%replace NETOPT_REUSEADDR by 0;   /* SO_REUSEADDR */
+%replace NETOPT_KEEPALIVE  by 1;  /* SO_KEEPALIVE */
+%replace NETOPT_NODELAY    by 2;  /* TCP_NODELAY  */
 
- dcl 1 SOCK_FLAGS static,
-       2 CLOEXEC  fixed bin(31) init(524288), /* SOCK_CLOEXEC 0x80000 */
-       2 NONBLOCK fixed bin(31) init(2048);  /* SOCK_NONBLOCK 0x800 */
+/* --- shutdown(2) directions are SHUT_* above; UDP needs none --------------- */
+%replace MSG_DONTWAIT  by 64;     /* send/recv flag: nonblocking operation */
 
- dcl 1 INADDR static,
-       2 ANY       fixed bin(31) init(0),   /* INADDR_ANY */
-       2 BROADCAST fixed bin(31) init(-1);  /* INADDR_BROADCAST */
-
- dcl 1 MSG_FLAG static,
-       2 PEEK     fixed bin(31) init(2),     /* MSG_PEEK */
-       2 WAITALL  fixed bin(31) init(256),   /* MSG_WAITALL */
-       2 DONTWAIT fixed bin(31) init(64),    /* MSG_DONTWAIT */
-       2 NOSIGNAL fixed bin(31) init(16384); /* MSG_NOSIGNAL */
-
- dcl 1 SHUT static,
-       2 RD     fixed bin(31) init(0),   /* SHUT_RD */
-       2 WR     fixed bin(31) init(1),   /* SHUT_WR */
-       2 RDWR   fixed bin(31) init(2);   /* SHUT_RDWR */
-
- dcl SOMAXCONN fixed bin(31) static init(4096); /* SOMAXCONN */
-
- dcl 1 ERR static,
-       2 AGAIN fixed bin(31) init(11),      /* EAGAIN */
-       2 WOULDBLOCK fixed bin(31) init(35), /* EWOULDBLOCK macOS/BSD */
-       2 TIMEDOUT fixed bin(31) init(110),  /* ETIMEDOUT */
-       2 BADURL fixed bin(31) init(61),     /* malformed url in 
-       net_dial */
-       2 TOOLARGE fixed bin(31) init(75);   /* response >maxlength */
-
- dcl 1 POLL static,
-       2 IN   fixed bin(31) init(1),   /* POLLIN */
-       2 OUT  fixed bin(31) init(4),   /* POLLOUT */
-       2 ERR  fixed bin(31) init(8),   /* POLLERR */
-       2 HUP  fixed bin(31) init(16),  /* POLLHUP */
-       2 NVAL fixed bin(31) init(32);  /* POLLNVAL */
-
- /* conncb is aligned based - use 'dcl conn like conncb' */ 
- /* like loses initial, based requires implicit pointer */
- dcl 1 conncb aligned based,
-       2 fd        sock_fd_t,
-       2 ip_addr        char(46),  /* ipv6 max 45 + nul */
-       2 host_name      char(256) init(''),  /* 255 + nul, rfc 1035 */
-       2 port      port_t init(0),
-       2 is_connected bit(1) init('0'b),
-       2 addr_family    fixed bin(31),
-       2 sock_type      fixed bin(31),
-       2 flags      fixed bin(31),
-       2 ipv4_addr   fixed bin(31),
-       2 read_timeout  fixed bin(31) init(0),  /* ms, 0 infinite */
-       2 write_timeout fixed bin(31) init(0);  /* ms, 0 infinite */
+/* --- default buffer capacities --------------------------------------------- */
+%replace NET_BUF_CAP   by 4096;
+%replace NET_HOST_MAX  by 256;

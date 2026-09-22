@@ -1,138 +1,121 @@
-# PL/I Networking Library
+# libnet — PL/I-centric socket library (thin C, PL/I does the work)
 
-A basic networking library for PL/I
+A connection-oriented socket library whose design inverts the usual split:
 
-## Build & Install
+- **minimal C** (`source/c_bridge.c`): only the raw syscalls PL/I cannot
+  perform — `socket/bind/listen/accept/connect/send/recv/close/shutdown/
+  settimeout/setnonblock/poll/getpeername` plus an `errno` cache. Reached from
+  PL/I through pli-llvm's by-value C FFI.
+- **most processing in PL/I** (`include/net_base.inc`, `include/net_server.inc`):
+  the connection pool, receive buffering, delimiter scanning, retry loops,
+  timeout and error policy — all in PL/I, using `CONTROLLED` storage and
+  pointer handles.
 
-Requires Iron Spring PL/I and `gcc`, or similar.
+Callers hold only a `POINTER` handle; the connection structure layout is
+private to the library. This is the classic PL/I "fat runtime / task context"
+pattern — well-suited to AI-authored PL/I, where a handful of thin PL/I calls
+replace a page of socket bookkeeping.
 
-The Makefile auto-uses `ghcr.io/ross-shk/pli:latest` (also available from the GitHub [repo](https://github.com/ross-shk/pli-docker)) if no Iron Spring PL/I is available:
+## Style
 
-```sh
-make                
-make test
+The PL/I follows classic PL/I conventions drawn from the reference corpus
+(`references/text/PL:I Programming Style.txt`, Iron Spring samples):
+
+- `CONTROLLED` connection records declared `ALIGNED` for efficient member
+  access;
+- a module header (name / author / purpose / calling sequence) atop every
+  include;
+- declarations grouped by kind (parameters, automatic, builtins) and
+  commented by section, with `%page`-style block separators;
+- errno exposed as `%replace` named constants (`errno.inc`, after Iron
+  Spring's `lib/include/errno.inc`) rather than magic numbers;
+- ON-units kept to a single action and re-arming the condition (`ON ... SYSTEM;`)
+  inside the unit so a failure cannot recurse;
+- `SELECT` over laddered `IF` for multi-way dispatch.
+
+## Layout
+
+| Path | Contents |
+|---|---|
+| `source/c_bridge.c` | the ONLY C — thin syscall wrappers |
+| `include/type_defs.inc` | constants (`AF_*`, `SOCK_*`, `NET_*`), sizes |
+| `include/errno.inc` | POSIX errno as `%replace` named constants |
+| `include/c_bridge.inc` | by-value FFI declarations for the C bridge |
+| `include/net_errors.inc` | `condition neterror` / `condition nettimeout`, `net_errtext` |
+| `include/net_base.inc` | client API (handle-based, multi-entry read/send) |
+| `include/net_server.inc` | server API (`net_listen` / `net_accept`) |
+| `include/net.inc` | master include — `%include net;` gets everything |
+| `examples/echo_server.pli` | echo server + client demo |
+
+## Build
+
+```bash
+make            # builds libnet.a (the C bridge) + dist/net.inc
+make example    # tries the demo; shows the wishlist gaps today
 ```
 
-Install - only on systems with PL/I installed natively:
+`make all` succeeds now. Compiling a *program* (which pulls in the PL/I library
+via `%include net;`) requires the pli-llvm features listed in
+[`WISHLIST.md`](WISHLIST.md). Once those land, build a program with:
 
-```sh
-sudo make install             
+```bash
+make build-prog SRC=examples/echo_server.pli OUT=echo_server
 ```
 
-Or just use `libnet.a` available in the project root after build directly.
-
-## Usage
-
-See `examples/readme_usage.pli` and [API docs](docs/api.md):
+## API sketch
 
 ```pli
-main: procedure options(main);
- %include net;
+%include net;
+dcl conn pointer;
 
-   declare
-     request  char(256) varying,
-     response char(2048),
-     host     char(256) varying init('example.com:80'),
-     bytes    size_t,
-     conn     like conncb;
-  
-   on condition(neterror) begin;  /* handle low-level network errors */
-     display('Networking error, code = ' || oncode());
-     goto done;
-   end;
+conn = net_open(AF_INET, SOCK_STREAM, 0);        /* library allocates (CONTROLLED) */
+rc   = net_connect(conn, '127.0.0.1', 8090);
+rc   = net_setopt(conn, NETOPT_KEEPALIVE, 1);    /* socket options */
+bytes = net_write(conn, 'hello');
+bytes = net_read_until(conn, buf, '0A'x);        /* read a line */
+call net_close(conn);                            /* frees (CONTROLLED pop) */
 
-    request =
-        'GET / HTTP/1.1'    || CR_LF ||
-        'Host: ' || host    || CR_LF ||
-        'Connection: close' || CR_LF || CR_LF;
-   
-   call net_dial(conn, host, AF.INET);  /* host is auto-resolved */
-
-   call net_write_all(conn, request); 
-   bytes = net_read_all(conn, response);
-
-   /* only reached unless there's a network error */
-   display('Response ' || substr(response, 1, bytes));
-   
- done:
-   call net_close(conn); 
- end;
+/* errors/timeouts via ON conditions */
+on condition(neterror) begin; ... end;
+on condition(nettimeout) begin; ... end;
 ```
 
-## Run an Example
+## Production readiness
 
-You can build and run any single PL/I program using the `build.sh` at the project root (uses Docker or a natively installed compiler):
+The C bridge and PL/I layer cover the core of what a production socket client
+or single-client server needs:
 
-```sh
-./build.sh run examples/readme_usage.pli
-```
+- **socket options** — `net_setopt` (`NETOPT_REUSEADDR` / `KEEPALIVE` /
+  `NODELAY`) and `net_set_linger`; platform values live in C, not PL/I;
+- **addresses** — `net_peer` (remote) and `net_local` (bound local addr/port);
+- **DNS** — `net_resolve` (host ↔ dotted quad), plus connect-time resolution;
+- **nonblocking connect** — `net_connect_nb` + `net_connect_finish`
+  (`EINPROGRESS` → poll writable → check `SO_ERROR`);
+- **UDP** — `net_sendto` / `net_recvfrom` datagram send/receive;
+- **errors** — `net_strerror` (full errno text) and `net_errtext`; named
+  errno constants (`errno.inc`);
+- **buffer safety** — `net_read_all` / `net_read_until` bound appends to the
+  caller buffer (`maxlength`), so a long stream cannot overrun.
 
-On a system with the Iron Spring PL/I or a similar compiler installed directly, you can compile and link using the following commands (make sure to build and install this library first, see [Build & Install](#build--install) above):
+Still to add for a fully production-grade library (out of current scope):
 
-```sh
-cd examples
+- **multi-client event loop** — a server must `select`/`poll` across many
+  connections; today only single-fd `net_poll` exists, and the CONTROLLED
+  LIFO pool makes many-outstanding-connections awkward;
+- **connect-timeout orchestration** — wiring `net_connect_nb` + a poll-with-
+  deadline into a single blocking `net_connect_to(h, host, port, ms)`;
+- **TLS** (out of scope; pair libnet with OpenSSL at a higher layer);
+- **thread-safety** — the CONTROLLED pool is per-thread; cross-thread sharing
+  of a handle is not guarded.
 
-plic -C -dELF readme_usage.pli    \
-  $(pkg-config --cflags net)      \  
-  -o readme_usage.o
+## Error model
 
-gcc -m32 -no-pie -z muldefs        \   
-  -o readme_usage readme_usage.o   \
-  $(pkg-config --libs net)                 
-```
+- `condition neterror` — hard error; `oncode()` = `errno`.
+- `condition nettimeout` — read/write timeout or `EAGAIN`/`EINTR`.
 
-**NOTE:** `pkg-config` handles the library paths only. The remaining flags are toolchain requirements (Iron Spring PL/I's 32-bit ELF target) and don't change between projects.
+## Status
 
-Without installing, compile and link against the local build:
-
-```sh
-# from examples/
-
-plic -C -dELF -i../include readme_usage.pli -o readme_usage.o
-
-gcc -m32 -no-pie -z muldefs -o readme_usage readme_usage.o ../libnet.a \
-  -lprf /usr/lib/pli/alt/fhs.o /usr/lib/pli/alt/ghs.o
-```
-
-then run:
-
-```sh
-./readme_usage
-```
-
-Linking against `fhs.o` and `ghs.o` (shipped as part of Iron Spring PL/I) is required for interoperability with C networking functions.
-
-If using Docker, mount the project root so `../include` and `../libnet.a` are visible - same commands via helper (works in `bash`/`zsh`):
-
-```sh
-# from examples/
-
-dockerize() { docker run --rm --platform linux/386 -v $PWD/..:/workspace -w /workspace/examples ghcr.io/ross-shk/pli "$@"; }
-
-dockerize plic -C -dELF -i../include readme_usage.pli -o readme_usage.o
-
-dockerize gcc -m32 -no-pie -z muldefs -o readme_usage readme_usage.o ../libnet.a -lprf /usr/lib/pli/alt/fhs.o /usr/lib/pli/alt/ghs.o
-
-dockerize ./readme_usage
-```
-
-## Testing
-
-`make test` builds `tests/server.pli` (echo/http on `18080`, `/delay` sleeps `2000` via `delay`) and runs 8 e2e clients against it:
-
-- `tests/http_get` — `net_dial` + HTTP
-- `tests/echo` — `net_open`/`net_connect` + `net_write`/`net_read` echo
-- `tests/send_recv` — `net_send`/`net_recv` with `flags=0` echo
-- `tests/resolve_dial` — `net_resolve` + `net_dial`
-- `tests/close_shutdown` — `net_close`/`net_shutdown` (`SHUT.RDWR`)
-- `tests/timeout` — direct `conn.read_timeout` assignment, expects `neterror 11`/`110` on `/delay`
-- `tests/ephemeral` — `net_listen` with `port 0` verifies `server.port` assigned via `c_getsockname`, plus peer check
-- `tests/poll` — `net_poll` `POLL.IN` `0` timeout vs `2000` readable
-
-Run a single test: `./build.sh run tests/echo.pli` (server must be running — `make test` handles this automatically).
-
-Diagnostics: `*.lst` `grep -E '\(ERR|WRN\)'`, `rc 0` ok `4` warn `8` error — `Makefile` tolerates `4`.
-
-## License
-
-Apache 2.0
+The implementation is written idiomatic and complete **as if the pli-llvm
+wishlist is already implemented**. Today `make all` builds the C bridge (the
+bindings are C-tested); the PL/I program path blocks on the wishlist. The
+deprecated original (Iron Spring `linux/386`) is preserved under `deprecated/`.
