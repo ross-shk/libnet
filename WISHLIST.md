@@ -101,12 +101,13 @@ These are additions to `source/c_bridge.c` — pure C, reached via the already-
 served by-value FFI, so they need no pli-llvm compiler work. All are C-tested
 (see `tests/c_bridge.c` smoke test):
 
-- socket options by libnet code: `s_sockopt` (`NETOPT_REUSEADDR` /
-  `NETOPT_KEEPALIVE` / `NETOPT_NODELAY`), `s_setlinger` (SO_LINGER);
-- `s_getsockname` (bound local address);
-- `s_resolve` (host ↔ dotted quad) and `s_strerror` (errno text);
-- `s_connect_nb` / `s_getsockerr` (nonblocking connect, EINPROGRESS, SO_ERROR);
-- `s_sendto` / `s_recvfrom` (UDP datagrams).
+- socket options by libnet code: `netc_sockopt` (`NETOPT_REUSEADDR` /
+  `NETOPT_KEEPALIVE` / `NETOPT_NODELAY`), `netc_setlinger` (SO_LINGER);
+- `netc_getsockname` (bound local address);
+- `netc_resolve` (host ↔ dotted quad) and `netc_strerror` (errno text);
+- `netc_connect_nb` / `netc_getsockerr` (nonblocking connect, EINPROGRESS,
+  SO_ERROR);
+- `netc_sendto` / `netc_recvfrom` (UDP datagrams).
 
 
 ## Non-goals

@@ -9,116 +9,116 @@
  */
 
 /* socket / listen / accept */
-dcl s_socket entry (fixed bin(31), fixed bin(31), fixed bin(31))
+dcl netc_socket entry (fixed bin(31), fixed bin(31), fixed bin(31))
     returns (fixed bin(31))
-    options (linkage(system)) external ('s_socket');
+    options (linkage(system)) external ('netc_socket');
 
-dcl s_bind entry (fixed bin(31), fixed bin(31))
+dcl netc_bind entry (fixed bin(31), fixed bin(31))
     returns (fixed bin(31))
-    options (linkage(system)) external ('s_bind');
+    options (linkage(system)) external ('netc_bind');
 
-dcl s_listen entry (fixed bin(31), fixed bin(31))
+dcl netc_listen entry (fixed bin(31), fixed bin(31))
     returns (fixed bin(31))
-    options (linkage(system)) external ('s_listen');
+    options (linkage(system)) external ('netc_listen');
 
-dcl s_accept entry (fixed bin(31))
+dcl netc_accept entry (fixed bin(31))
     returns (fixed bin(31))
-    options (linkage(system)) external ('s_accept');
+    options (linkage(system)) external ('netc_accept');
 
 /* connect: host is a char* with an explicit length; port is by value */
-dcl s_connect entry (fixed bin(31), char(*), fixed bin(31), fixed bin(31))
+dcl netc_connect entry (fixed bin(31), char(*), fixed bin(31), fixed bin(31))
     returns (fixed bin(31))
-    options (linkage(system)) external ('s_connect');
+    options (linkage(system)) external ('netc_connect');
 
 /* send / recv: buffer is char* with an explicit length; flags by value */
-dcl s_send entry (fixed bin(31), char(*), fixed bin(31), fixed bin(31))
+dcl netc_send entry (fixed bin(31), char(*), fixed bin(31), fixed bin(31))
     returns (fixed bin(31))
-    options (linkage(system)) external ('s_send');
+    options (linkage(system)) external ('netc_send');
 
-dcl s_recv entry (fixed bin(31), char(*), fixed bin(31), fixed bin(31))
+dcl netc_recv entry (fixed bin(31), char(*), fixed bin(31), fixed bin(31))
     returns (fixed bin(31))
-    options (linkage(system)) external ('s_recv');
+    options (linkage(system)) external ('netc_recv');
 
 /* close / shutdown */
-dcl s_close entry (fixed bin(31))
+dcl netc_close entry (fixed bin(31))
     returns (fixed bin(31))
-    options (linkage(system)) external ('s_close');
+    options (linkage(system)) external ('netc_close');
 
-dcl s_shutdown entry (fixed bin(31), fixed bin(31))
+dcl netc_shutdown entry (fixed bin(31), fixed bin(31))
     returns (fixed bin(31))
-    options (linkage(system)) external ('s_shutdown');
+    options (linkage(system)) external ('netc_shutdown');
 
 /* timeouts / nonblocking / poll */
-dcl s_settimeout entry (fixed bin(31), fixed bin(31), fixed bin(31))
+dcl netc_settimeout entry (fixed bin(31), fixed bin(31), fixed bin(31))
     returns (fixed bin(31))
-    options (linkage(system)) external ('s_settimeout');
+    options (linkage(system)) external ('netc_settimeout');
 
-dcl s_setnonblock entry (fixed bin(31), fixed bin(31))
+dcl netc_setnonblock entry (fixed bin(31), fixed bin(31))
     returns (fixed bin(31))
-    options (linkage(system)) external ('s_setnonblock');
+    options (linkage(system)) external ('netc_setnonblock');
 
-dcl s_poll entry (fixed bin(31), fixed bin(31), fixed bin(31))
+dcl netc_poll entry (fixed bin(31), fixed bin(31), fixed bin(31))
     returns (fixed bin(31))
-    options (linkage(system)) external ('s_poll');
+    options (linkage(system)) external ('netc_poll');
 
 /* peer address: ip is a char(*) output buffer; port is an out-param */
-dcl s_getpeername entry (fixed bin(31), char(*), fixed bin(31),
+dcl netc_getpeername entry (fixed bin(31), char(*), fixed bin(31),
                          pointer)
     returns (fixed bin(31))
-    options (linkage(system)) external ('s_getpeername');
+    options (linkage(system)) external ('netc_getpeername');
 
 /* local address (getsockname): ip char(*) out, port out-param */
-dcl s_getsockname entry (fixed bin(31), char(*), fixed bin(31),
+dcl netc_getsockname entry (fixed bin(31), char(*), fixed bin(31),
                          pointer)
     returns (fixed bin(31))
-    options (linkage(system)) external ('s_getsockname');
+    options (linkage(system)) external ('netc_getsockname');
 
-/* socket option by libnet code: s_sockopt(fd, opt, value) */
-dcl s_sockopt entry (fixed bin(31), fixed bin(31), fixed bin(31))
+/* socket option by libnet code: netc_sockopt(fd, opt, value) */
+dcl netc_sockopt entry (fixed bin(31), fixed bin(31), fixed bin(31))
     returns (fixed bin(31))
-    options (linkage(system)) external ('s_sockopt');
+    options (linkage(system)) external ('netc_sockopt');
 
 /* SO_LINGER(fd, on, seconds) */
-dcl s_setlinger entry (fixed bin(31), fixed bin(31), fixed bin(31))
+dcl netc_setlinger entry (fixed bin(31), fixed bin(31), fixed bin(31))
     returns (fixed bin(31))
-    options (linkage(system)) external ('s_setlinger');
+    options (linkage(system)) external ('netc_setlinger');
 
 /* nonblocking connect: 0 done, -1 in progress (errno=EINPROGRESS),
  * -2 error. host is char(*) with an explicit length. */
-dcl s_connect_nb entry (fixed bin(31), char(*), fixed bin(31),
+dcl netc_connect_nb entry (fixed bin(31), char(*), fixed bin(31),
                         fixed bin(31))
     returns (fixed bin(31))
-    options (linkage(system)) external ('s_connect_nb');
+    options (linkage(system)) external ('netc_connect_nb');
 
 /* SO_ERROR check after a nonblocking connect; err via out-param */
-dcl s_getsockerr entry (fixed bin(31), pointer)
+dcl netc_getsockerr entry (fixed bin(31), pointer)
     returns (fixed bin(31))
-    options (linkage(system)) external ('s_getsockerr');
+    options (linkage(system)) external ('netc_getsockerr');
 
 /* resolve host to dotted-quad in ip (char(*) out, explicit len) */
-dcl s_resolve entry (char(*), fixed bin(31), char(*), fixed bin(31))
+dcl netc_resolve entry (char(*), fixed bin(31), char(*), fixed bin(31))
     returns (fixed bin(31))
-    options (linkage(system)) external ('s_resolve');
+    options (linkage(system)) external ('netc_resolve');
 
 /* strerror(e) into buf (char(*) out) */
-dcl s_strerror entry (fixed bin(31), char(*), fixed bin(31))
-    options (linkage(system)) external ('s_strerror');
+dcl netc_strerror entry (fixed bin(31), char(*), fixed bin(31))
+    options (linkage(system)) external ('netc_strerror');
 
 /* UDP datagrams */
-dcl s_sendto entry (fixed bin(31), char(*), fixed bin(31), fixed bin(31),
+dcl netc_sendto entry (fixed bin(31), char(*), fixed bin(31), fixed bin(31),
                     char(*), fixed bin(31), fixed bin(31))
     returns (fixed bin(31))
-    options (linkage(system)) external ('s_sendto');
+    options (linkage(system)) external ('netc_sendto');
 
-dcl s_recvfrom entry (fixed bin(31), char(*), fixed bin(31), fixed bin(31),
+dcl netc_recvfrom entry (fixed bin(31), char(*), fixed bin(31), fixed bin(31),
                       char(*), fixed bin(31), pointer)
     returns (fixed bin(31))
-    options (linkage(system)) external ('s_recvfrom');
+    options (linkage(system)) external ('netc_recvfrom');
 
 /* errno cache */
-dcl s_errno entry ()
+dcl netc_errno entry ()
     returns (fixed bin(31))
-    options (linkage(system)) external ('s_errno');
+    options (linkage(system)) external ('netc_errno');
 
-dcl s_clearerr entry ()
-    options (linkage(system)) external ('s_clearerr');
+dcl netc_clearerr entry ()
+    options (linkage(system)) external ('netc_clearerr');

@@ -10,7 +10,7 @@
  *   - character buffers are char* with an explicit length (PL/I CHAR is
  *     blank-padded and not NUL-terminated, so we never rely on NUL).
  *   - most functions return 0 on success, -1 on error; errno is retained in
- *     a thread-local cache read by s_errno().
+ *     a thread-local cache read by netc_errno().
  */
 
 #include <arpa/inet.h>
@@ -32,14 +32,14 @@ static void save_errno(void) {
   cached_errno = errno;
 }
 
-int s_socket(int family, int type, int proto) {
+int netc_socket(int family, int type, int proto) {
   int fd = socket(family, type, proto);
   if (fd < 0)
     save_errno();
   return fd;
 }
 
-int s_bind(int fd, unsigned int port) {
+int netc_bind(int fd, unsigned int port) {
   struct sockaddr_in a;
   memset(&a, 0, sizeof a);
   a.sin_family = AF_INET;
@@ -52,7 +52,7 @@ int s_bind(int fd, unsigned int port) {
   return 0;
 }
 
-int s_listen(int fd, int backlog) {
+int netc_listen(int fd, int backlog) {
   if (listen(fd, backlog) != 0) {
     save_errno();
     return -1;
@@ -60,7 +60,7 @@ int s_listen(int fd, int backlog) {
   return 0;
 }
 
-int s_accept(int fd) {
+int netc_accept(int fd) {
   int cfd = accept(fd, NULL, NULL);
   if (cfd < 0)
     save_errno();
@@ -69,7 +69,7 @@ int s_accept(int fd) {
 
 /* Resolve host to the loopback-adjacent address and connect. hostlen is the
  * PL/I char length (may be padded with blanks); we NUL-terminate a copy. */
-int s_connect(int fd, const char *host, int hostlen, int port) {
+int netc_connect(int fd, const char *host, int hostlen, int port) {
   char hbuf[256];
   int n = hostlen < (int)sizeof(hbuf) - 1 ? hostlen : (int)sizeof(hbuf) - 1;
   int i;
@@ -101,21 +101,21 @@ int s_connect(int fd, const char *host, int hostlen, int port) {
   return 0;
 }
 
-int s_send(int fd, const char *buf, int len, int flags) {
+int netc_send(int fd, const char *buf, int len, int flags) {
   int n = (int)send(fd, buf, (unsigned)len, flags);
   if (n < 0)
     save_errno();
   return n;
 }
 
-int s_recv(int fd, char *buf, int len, int flags) {
+int netc_recv(int fd, char *buf, int len, int flags) {
   int n = (int)recv(fd, buf, (unsigned)len, flags);
   if (n < 0)
     save_errno();
   return n;
 }
 
-int s_close(int fd) {
+int netc_close(int fd) {
   if (close(fd) != 0) {
     save_errno();
     return -1;
@@ -123,7 +123,7 @@ int s_close(int fd) {
   return 0;
 }
 
-int s_shutdown(int fd, int how) {
+int netc_shutdown(int fd, int how) {
   if (shutdown(fd, how) != 0) {
     save_errno();
     return -1;
@@ -132,7 +132,7 @@ int s_shutdown(int fd, int how) {
 }
 
 /* SO_RCVTIMEO / SO_SNDTIMEO in milliseconds; -1 to clear. */
-int s_settimeout(int fd, int rto_ms, int wto_ms) {
+int netc_settimeout(int fd, int rto_ms, int wto_ms) {
   struct timeval tv;
   if (rto_ms >= 0) {
     tv.tv_sec = rto_ms / 1000;
@@ -153,7 +153,7 @@ int s_settimeout(int fd, int rto_ms, int wto_ms) {
   return 0;
 }
 
-int s_setnonblock(int fd, int on) {
+int netc_setnonblock(int fd, int on) {
   int fl = fcntl(fd, F_GETFL, 0);
   if (fl < 0) {
     save_errno();
@@ -172,7 +172,7 @@ int s_setnonblock(int fd, int on) {
 
 /* poll(fd, events, ms). events bitmask: 1=POLLIN, 2=POLLOUT.
  * Returns the number of ready fds, 0 on timeout, -1 on error. */
-int s_poll(int fd, int events, int ms) {
+int netc_poll(int fd, int events, int ms) {
   struct pollfd p;
   p.fd = fd;
   p.events = (short)events;
@@ -184,7 +184,7 @@ int s_poll(int fd, int events, int ms) {
 }
 
 /* Peer address into ip (16-byte dotted quad) and port. Returns 0 or -1. */
-int s_getpeername(int fd, char *ip, int iplen, int *port) {
+int netc_getpeername(int fd, char *ip, int iplen, int *port) {
   struct sockaddr_in a;
   socklen_t alen = sizeof a;
   if (getpeername(fd, (struct sockaddr *)&a, &alen) != 0) {
@@ -218,7 +218,7 @@ static void fill_sockaddr(const struct sockaddr_in *a, char *ip, int iplen,
 
 /* Resolve host (blank-padded, len bytes) to a dotted-quad string in ip
  * (blank-padded to iplen). Returns 0 on success, -1 on failure. */
-int s_resolve(const char *host, int hostlen, char *ip, int iplen) {
+int netc_resolve(const char *host, int hostlen, char *ip, int iplen) {
   char hbuf[256];
   int n = hostlen < (int)sizeof(hbuf) - 1 ? hostlen : (int)sizeof(hbuf) - 1;
   int i;
@@ -247,7 +247,7 @@ int s_resolve(const char *host, int hostlen, char *ip, int iplen) {
 }
 
 /* strerror(e) into buf (blank-padded to buflen). */
-void s_strerror(int e, char *buf, int buflen) {
+void netc_strerror(int e, char *buf, int buflen) {
   const char *s = strerror(e);
   int i;
   for (i = 0; i < buflen && s[i]; ++i)
@@ -260,7 +260,7 @@ void s_strerror(int e, char *buf, int buflen) {
  * level/optname values stay in C. opt codes (see type_defs.inc):
  *   0 = SO_REUSEADDR, 1 = SO_KEEPALIVE, 2 = TCP_NODELAY
  * value is the int argument (0/1 on/off). Returns 0 or -1. */
-int s_sockopt(int fd, int opt, int value) {
+int netc_sockopt(int fd, int opt, int value) {
   int level = 0, name = 0;
   switch (opt) {
     case 0: level = SOL_SOCKET; name = SO_REUSEADDR; break;
@@ -276,7 +276,7 @@ int s_sockopt(int fd, int opt, int value) {
 }
 
 /* SO_LINGER on/off with a linger timeout in seconds. Returns 0 or -1. */
-int s_setlinger(int fd, int on, int seconds) {
+int netc_setlinger(int fd, int on, int seconds) {
   struct linger lg;
   lg.l_onoff = on ? 1 : 0;
   lg.l_linger = on ? seconds : 0;
@@ -288,7 +288,7 @@ int s_setlinger(int fd, int on, int seconds) {
 }
 
 /* Local address (getsockname) into ip/port. Returns 0 or -1. */
-int s_getsockname(int fd, char *ip, int iplen, int *port) {
+int netc_getsockname(int fd, char *ip, int iplen, int *port) {
   struct sockaddr_in a;
   socklen_t alen = sizeof a;
   if (getsockname(fd, (struct sockaddr *)&a, &alen) != 0) {
@@ -301,9 +301,9 @@ int s_getsockname(int fd, char *ip, int iplen, int *port) {
 
 /* Nonblocking connect. host is blank-padded, len bytes; port by value.
  * Returns 0 if the connect completed, -1 with errno EINPROGRESS if it is in
- * progress (caller should poll for writability then check s_getsockerr),
+ * progress (caller should poll for writability then check netc_getsockerr),
  * -2 on other errors (errno cached). */
-int s_connect_nb(int fd, const char *host, int hostlen, int port) {
+int netc_connect_nb(int fd, const char *host, int hostlen, int port) {
   char hbuf[256];
   int n = hostlen < (int)sizeof(hbuf) - 1 ? hostlen : (int)sizeof(hbuf) - 1;
   int i;
@@ -342,7 +342,7 @@ int s_connect_nb(int fd, const char *host, int hostlen, int port) {
 
 /* SO_ERROR for a completed nonblocking connect: 0 if it succeeded, else the
  * error code (also returned via *err). */
-int s_getsockerr(int fd, int *err) {
+int netc_getsockerr(int fd, int *err) {
   int soerr = 0;
   socklen_t len = sizeof soerr;
   if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &soerr, &len) != 0) {
@@ -355,7 +355,7 @@ int s_getsockerr(int fd, int *err) {
 }
 
 /* UDP send to ip:port. Returns bytes sent or -1. */
-int s_sendto(int fd, const char *buf, int len, int flags, const char *ip,
+int netc_sendto(int fd, const char *buf, int len, int flags, const char *ip,
              int iplen, int port) {
   char hbuf[256];
   int n = iplen < (int)sizeof(hbuf) - 1 ? iplen : (int)sizeof(hbuf) - 1;
@@ -384,7 +384,7 @@ int s_sendto(int fd, const char *buf, int len, int flags, const char *ip,
 }
 
 /* UDP recv; the sender's address is returned in ip/port. */
-int s_recvfrom(int fd, char *buf, int len, int flags, char *ip, int iplen,
+int netc_recvfrom(int fd, char *buf, int len, int flags, char *ip, int iplen,
                int *port) {
   struct sockaddr_in a;
   socklen_t alen = sizeof a;
@@ -398,10 +398,10 @@ int s_recvfrom(int fd, char *buf, int len, int flags, char *ip, int iplen,
   return r;
 }
 
-int s_errno(void) {
+int netc_errno(void) {
   return cached_errno;
 }
 
-void s_clearerr(void) {
+void netc_clearerr(void) {
   cached_errno = 0;
 }

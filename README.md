@@ -33,11 +33,29 @@ The PL/I follows classic PL/I conventions drawn from the reference corpus
   inside the unit so a failure cannot recurse;
 - `SELECT` over laddered `IF` for multi-way dispatch.
 
+## Naming
+
+Names follow classic PL/I convention: short meaningful module prefixes (the
+Iron Spring runtime `_pli_`, MULTICS networking `net_`), lowercase verbs for
+internal procedures, and descriptive constants.
+
+| Layer | Prefix / form | Example |
+|---|---|---|
+| C bridge (system primitives) | `netc_` | `netc_socket`, `netc_recv`, `netc_sockopt` |
+| Public PL/I procedures | `net_` | `net_open`, `net_connect`, `net_read_until` |
+| Option codes | `NETOPT_*` | `NETOPT_REUSEADDR`, `NETOPT_KEEPALIVE`, `NETOPT_NODELAY` |
+| Status codes | `NET_*` | `NET_OK`, `NET_ERR`, `NET_EOF`, `NET_TIMEOUT` |
+| errno constants | `E*` | `EAGAIN`, `EBADF`, `ECONNREFUSED` (in `errno.inc`) |
+| POSIX mirror | as-is | `AF_INET`, `SOCK_STREAM`, `SHUT_WR`, `POLLIN` |
+| Conditions | lowercase | `neterror`, `nettimeout` |
+| Internal pointers | role-based | `pconn` (connection handle), `psrv` (server handle) |
+| Internal helpers | lowercase verbs | `raise_err`, `raise_timeout` |
+
 ## Layout
 
 | Path | Contents |
 |---|---|
-| `source/c_bridge.c` | the ONLY C — thin syscall wrappers |
+| `source/c_bridge.c` | the ONLY C — thin syscall wrappers (`netc_*`) |
 | `include/type_defs.inc` | constants (`AF_*`, `SOCK_*`, `NET_*`), sizes |
 | `include/errno.inc` | POSIX errno as `%replace` named constants |
 | `include/c_bridge.inc` | by-value FFI declarations for the C bridge |
@@ -45,12 +63,14 @@ The PL/I follows classic PL/I conventions drawn from the reference corpus
 | `include/net_base.inc` | client API (handle-based, multi-entry read/send) |
 | `include/net_server.inc` | server API (`net_listen` / `net_accept`) |
 | `include/net.inc` | master include — `%include net;` gets everything |
+| `tests/c_bridge.c` | C regression test for the bridge bindings |
 | `examples/echo_server.pli` | echo server + client demo |
 
 ## Build
 
 ```bash
 make            # builds libnet.a (the C bridge) + dist/net.inc
+make test       # builds + runs the C bridge regression test (works today)
 make example    # tries the demo; shows the wishlist gaps today
 ```
 
@@ -116,6 +136,7 @@ Still to add for a fully production-grade library (out of current scope):
 ## Status
 
 The implementation is written idiomatic and complete **as if the pli-llvm
-wishlist is already implemented**. Today `make all` builds the C bridge (the
-bindings are C-tested); the PL/I program path blocks on the wishlist. The
-deprecated original (Iron Spring `linux/386`) is preserved under `deprecated/`.
+wishlist is already implemented**. Today `make all` builds the C bridge, and
+`make test` runs the `netc_*` bridge regression test (passing). The PL/I
+program path blocks on the wishlist; the deprecated original (Iron Spring
+`linux/386`) is preserved under `deprecated/`.

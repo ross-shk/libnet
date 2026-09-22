@@ -43,9 +43,9 @@ dcl 1 cli_rec controlled aligned,
    2 in_len           fixed bin(31);
 
 /* A based view of the server record for the accept path. */
-dcl 1 srv_view based(server_ptr),
+dcl 1 srv_view based(psrv),
    2 fd fixed bin(31);
-dcl server_ptr pointer;
+dcl psrv pointer;
 
 /* Declare the builtins used. */
 dcl (addr, null) builtin;
@@ -55,8 +55,8 @@ dcl (addr, null) builtin;
 /*--------------------------------------------------------------------------*/
 srv_raise_err: procedure;
    dcl e fixed bin(31);
-   e = s_errno();
-   call s_clearerr();
+   e = netc_errno();
+   call netc_clearerr();
    if e ^= 0 then signal condition(neterror) set oncode(e);
 end srv_raise_err;
 
@@ -70,19 +70,19 @@ net_listen: procedure (port, backlog) returns (pointer);
    dcl fd      fixed bin(31);
    dcl h       pointer;
 
-   fd = s_socket(AF_INET, SOCK_STREAM, 0);
+   fd = netc_socket(AF_INET, SOCK_STREAM, 0);
    if fd < 0 then do;
       call srv_raise_err();
       return null();
    end;
-   if s_bind(fd, port) < 0 then do;
+   if netc_bind(fd, port) < 0 then do;
       call srv_raise_err();
-      call s_close(fd);
+      call netc_close(fd);
       return null();
    end;
-   if s_listen(fd, backlog) < 0 then do;
+   if netc_listen(fd, backlog) < 0 then do;
       call srv_raise_err();
-      call s_close(fd);
+      call netc_close(fd);
       return null();
    end;
 
@@ -106,8 +106,8 @@ net_accept: procedure (server, client) returns (fixed bin(31));
    dcl client pointer;
    dcl cfd    fixed bin(31);
 
-   server_ptr = server;
-   cfd = s_accept(srv_view.fd);
+   psrv = server;
+   cfd = netc_accept(srv_view.fd);
    if cfd < 0 then do;
       call srv_raise_err();
       return NET_ERR;

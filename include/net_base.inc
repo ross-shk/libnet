@@ -56,7 +56,7 @@ dcl 1 conn_rec controlled aligned,
 
 /* A based view of the same layout, declared on a local pointer, so each
  * method can address a caller-supplied handle. */
-dcl 1 conn_view based(base_ptr),
+dcl 1 conn_view based(pconn),
    2 fd               fixed bin(31),
    2 is_connected     bit(1),
    2 read_timeout     fixed bin(31),
@@ -65,7 +65,7 @@ dcl 1 conn_view based(base_ptr),
    2 peer_port        fixed bin(31),
    2 inbuf            char(NET_BUF_CAP),
    2 in_len           fixed bin(31);
-dcl base_ptr pointer;
+dcl pconn pointer;
 
 /* Declare the builtins used throughout. */
 dcl (addr, null, length, maxlength, min, index, substr, trim, fixed)
@@ -77,8 +77,8 @@ dcl (addr, null, length, maxlength, min, index, substr, trim, fixed)
 /* Raise neterror with the current errno, unless 0. */
 raise_err: procedure;
    dcl e fixed bin(31);
-   e = s_errno();
-   call s_clearerr();
+   e = netc_errno();
+   call netc_clearerr();
    if e ^= 0 then signal condition(neterror) set oncode(e);
 end raise_err;
 
@@ -107,7 +107,7 @@ net_open: procedure (family, type, proto) returns (pointer);
    conn_rec.peer_port     = 0;
    conn_rec.in_len        = 0;
 
-   conn_rec.fd = s_socket(family, type, proto);
+   conn_rec.fd = netc_socket(family, type, proto);
    if conn_rec.fd < 0 then do;
       call raise_err();
       h = null();
@@ -128,8 +128,8 @@ net_connect: procedure (h, host, port) returns (fixed bin(31));
    dcl port fixed bin(31);
    dcl rc   fixed bin(31);
 
-   base_ptr = h;
-   rc = s_connect(conn_view.fd, host, length(host), port);
+   pconn = h;
+   rc = netc_connect(conn_view.fd, host, length(host), port);
    if rc < 0 then do;
       call raise_err();
       return NET_ERR;
@@ -166,8 +166,8 @@ end net_dial;
 /*--------------------------------------------------------------------------*/
 net_close: procedure (h);
    dcl h pointer;
-   base_ptr = h;
-   if conn_view.fd > 0 then call s_close(conn_view.fd);
+   pconn = h;
+   if conn_view.fd > 0 then call netc_close(conn_view.fd);
    conn_view.fd            = 0;
    conn_view.is_connected  = '0'b;
    conn_view.in_len        = 0;
@@ -178,8 +178,8 @@ net_shutdown: procedure (h, how) returns (fixed bin(31));
    dcl h   pointer;
    dcl how fixed bin(31);
    dcl rc  fixed bin(31);
-   base_ptr = h;
-   rc = s_shutdown(conn_view.fd, how);
+   pconn = h;
+   rc = netc_shutdown(conn_view.fd, how);
    if rc < 0 then do;
       call raise_err();
       return NET_ERR;
@@ -199,16 +199,16 @@ net_read: procedure (h, buffer, buflen) returns (fixed bin(31));
    dcl buflen fixed bin(31);
    dcl got    fixed bin(31);
 
-   base_ptr = h;
+   pconn = h;
    if conn_view.fd <= 0 then do;
       signal condition(neterror) set oncode(EBADF);
       return NET_ERR;
    end;
 
-   got = s_recv(conn_view.fd, buffer, buflen, 0);
+   got = netc_recv(conn_view.fd, buffer, buflen, 0);
    if got = 0 then return NET_EOF;
    if got < 0 then do;
-      if s_errno() = EAGAIN then do;
+      if netc_errno() = EAGAIN then do;
          call raise_timeout();
          return NET_TIMEOUT;
       end;
@@ -229,19 +229,19 @@ net_read_all: entry (h, buffer);
    dcl cap    fixed bin(31);
    dcl done   bit(1);
 
-   base_ptr = h;
+   pconn = h;
    total = 0;
    done  = '0'b;
    do while (^done);
       cap = min(NET_BUF_CAP, maxlength(buffer) - total);
       if cap <= 0 then return total;  /* caller buffer full */
-      got = s_recv(conn_view.fd, tmp, cap, 0);
+      got = netc_recv(conn_view.fd, tmp, cap, 0);
       if got = 0 then do;             /* EOF */
          done = '1'b;
          return total;
       end;
       if got < 0 then do;
-         if s_errno() = EAGAIN then do;
+         if netc_errno() = EAGAIN then do;
             call raise_timeout();
             return NET_TIMEOUT;
          end;
@@ -267,16 +267,16 @@ net_read_until: entry (h, buffer, delim);
    dcl cap    fixed bin(31);
    dcl done   bit(1);
 
-   base_ptr = h;
+   pconn = h;
    total = 0;
    done  = '0'b;
    do while (^done);
       cap = min(NET_BUF_CAP, maxlength(buffer) - total);
       if cap <= 0 then return total;  /* caller buffer full, no delimiter */
-      got = s_recv(conn_view.fd, tmp, cap, 0);
+      got = netc_recv(conn_view.fd, tmp, cap, 0);
       if got = 0 then return NET_EOF;
       if got < 0 then do;
-         if s_errno() = EAGAIN then do;
+         if netc_errno() = EAGAIN then do;
             call raise_timeout();
             return NET_TIMEOUT;
          end;
@@ -300,10 +300,10 @@ net_write: procedure (h, buffer) returns (fixed bin(31));
    dcl buffer char(*);
    dcl n      fixed bin(31);
 
-   base_ptr = h;
-   n = s_send(conn_view.fd, buffer, length(buffer), 0);
+   pconn = h;
+   n = netc_send(conn_view.fd, buffer, length(buffer), 0);
    if n < 0 then do;
-      if s_errno() = EAGAIN then do;
+      if netc_errno() = EAGAIN then do;
          call raise_timeout();
          return NET_TIMEOUT;
       end;
@@ -319,10 +319,10 @@ net_send: entry (h, buffer, flags) returns (fixed bin(31));
    dcl flags  fixed bin(31);
    dcl n      fixed bin(31);
 
-   base_ptr = h;
-   n = s_send(conn_view.fd, buffer, length(buffer), flags);
+   pconn = h;
+   n = netc_send(conn_view.fd, buffer, length(buffer), flags);
    if n < 0 then do;
-      if s_errno() = EAGAIN then do;
+      if netc_errno() = EAGAIN then do;
          call raise_timeout();
          return NET_TIMEOUT;
       end;
@@ -343,15 +343,15 @@ net_send_all: entry (h, buffer) returns (fixed bin(31));
    dcl chunk  char(NET_BUF_CAP);
    dcl take   fixed bin(31);
 
-   base_ptr = h;
+   pconn = h;
    total = 0;
    want  = length(buffer);
    do while (total < want);
       take  = min(NET_BUF_CAP, want - total);
       chunk = substr(buffer, total + 1, take);
-      n = s_send(conn_view.fd, chunk, take, 0);
+      n = netc_send(conn_view.fd, chunk, take, 0);
       if n < 0 then do;
-         if s_errno() = EAGAIN then iterate;
+         if netc_errno() = EAGAIN then iterate;
          call raise_err();
          return NET_ERR;
       end;
@@ -368,10 +368,10 @@ net_send_once: entry (h, buffer, flags) returns (fixed bin(31));
    dcl flags  fixed bin(31);
    dcl n      fixed bin(31);
 
-   base_ptr = h;
-   n = s_send(conn_view.fd, buffer, length(buffer), flags);
+   pconn = h;
+   n = netc_send(conn_view.fd, buffer, length(buffer), flags);
    if n < 0 then do;
-      if s_errno() = EAGAIN then do;
+      if netc_errno() = EAGAIN then do;
          call raise_timeout();
          return NET_TIMEOUT;
       end;
@@ -390,8 +390,8 @@ net_poll: procedure (h, events, ms) returns (fixed bin(31));
    dcl ms     fixed bin(31);
    dcl r      fixed bin(31);
 
-   base_ptr = h;
-   r = s_poll(conn_view.fd, events, ms);
+   pconn = h;
+   r = netc_poll(conn_view.fd, events, ms);
    if r < 0 then do;
       call raise_err();
       return NET_ERR;
@@ -405,8 +405,8 @@ net_set_timeout: procedure (h, rto, wto) returns (fixed bin(31));
    dcl wto fixed bin(31);
    dcl rc  fixed bin(31);
 
-   base_ptr = h;
-   rc = s_settimeout(conn_view.fd, rto, wto);
+   pconn = h;
+   rc = netc_settimeout(conn_view.fd, rto, wto);
    if rc < 0 then do;
       call raise_err();
       return NET_ERR;
@@ -421,9 +421,9 @@ net_set_nonblocking: procedure (h, on) returns (fixed bin(31));
    dcl on bit(1);
    dcl rc fixed bin(31);
 
-   base_ptr = h;
-   if on then rc = s_setnonblock(conn_view.fd, 1);
-   else        rc = s_setnonblock(conn_view.fd, 0);
+   pconn = h;
+   if on then rc = netc_setnonblock(conn_view.fd, 1);
+   else        rc = netc_setnonblock(conn_view.fd, 0);
    if rc < 0 then do;
       call raise_err();
       return NET_ERR;
@@ -442,8 +442,8 @@ net_setopt: procedure (h, opt, value) returns (fixed bin(31));
    dcl value fixed bin(31);
    dcl rc    fixed bin(31);
 
-   base_ptr = h;
-   rc = s_sockopt(conn_view.fd, opt, value);
+   pconn = h;
+   rc = netc_sockopt(conn_view.fd, opt, value);
    if rc < 0 then do;
       call raise_err();
       return NET_ERR;
@@ -458,8 +458,8 @@ net_set_linger: procedure (h, on, seconds) returns (fixed bin(31));
    dcl seconds fixed bin(31);
    dcl rc      fixed bin(31);
 
-   base_ptr = h;
-   rc = s_setlinger(conn_view.fd, on, seconds);
+   pconn = h;
+   rc = netc_setlinger(conn_view.fd, on, seconds);
    if rc < 0 then do;
       call raise_err();
       return NET_ERR;
@@ -476,8 +476,8 @@ net_peer: procedure (h, ip, port) returns (fixed bin(31));
    dcl port fixed bin(31);
    dcl rc   fixed bin(31);
 
-   base_ptr = h;
-   rc = s_getpeername(conn_view.fd, ip, maxlength(ip), addr(port));
+   pconn = h;
+   rc = netc_getpeername(conn_view.fd, ip, maxlength(ip), addr(port));
    if rc < 0 then do;
       call raise_err();
       return NET_ERR;
@@ -492,8 +492,8 @@ net_local: procedure (h, ip, port) returns (fixed bin(31));
    dcl port fixed bin(31);
    dcl rc   fixed bin(31);
 
-   base_ptr = h;
-   rc = s_getsockname(conn_view.fd, ip, maxlength(ip), addr(port));
+   pconn = h;
+   rc = netc_getsockname(conn_view.fd, ip, maxlength(ip), addr(port));
    if rc < 0 then do;
       call raise_err();
       return NET_ERR;
@@ -511,7 +511,7 @@ net_resolve: procedure (host, ip) returns (fixed bin(31));
    dcl ip   char(*);
    dcl rc   fixed bin(31);
 
-   rc = s_resolve(host, length(host), ip, maxlength(ip));
+   rc = netc_resolve(host, length(host), ip, maxlength(ip));
    if rc < 0 then do;
       call raise_err();
       return NET_ERR;
@@ -526,7 +526,7 @@ end net_resolve;
 net_strerror: procedure (e, buf);
    dcl e   fixed bin(31);
    dcl buf char(*);
-   call s_strerror(e, buf, maxlength(buf));
+   call netc_strerror(e, buf, maxlength(buf));
 end net_strerror;
 
 /*--------------------------------------------------------------------------*/
@@ -541,16 +541,16 @@ net_connect_nb: procedure (h, host, port) returns (fixed bin(31));
    dcl port fixed bin(31);
    dcl rc   fixed bin(31);
 
-   base_ptr = h;
-   call s_setnonblock(conn_view.fd, 1);
-   rc = s_connect_nb(conn_view.fd, host, length(host), port);
+   pconn = h;
+   call netc_setnonblock(conn_view.fd, 1);
+   rc = netc_connect_nb(conn_view.fd, host, length(host), port);
    if rc = 0 then do;
       conn_view.is_connected = '1'b;
       conn_view.peer_port    = port;
       return NET_OK;
    end;
    if rc = -1 then do;                 /* EINPROGRESS */
-      call s_clearerr();
+      call netc_clearerr();
       return NET_TIMEOUT;
    end;
    call raise_err();
@@ -564,9 +564,9 @@ net_connect_finish: procedure (h) returns (fixed bin(31));
    dcl e  fixed bin(31);
    dcl rc fixed bin(31);
 
-   base_ptr = h;
+   pconn = h;
    e = 0;
-   rc = s_getsockerr(conn_view.fd, addr(e));
+   rc = netc_getsockerr(conn_view.fd, addr(e));
    if rc < 0 then do;
       call raise_err();
       return NET_ERR;
@@ -591,11 +591,11 @@ net_sendto: procedure (h, buffer, ip, port) returns (fixed bin(31));
    dcl port   fixed bin(31);
    dcl n      fixed bin(31);
 
-   base_ptr = h;
-   n = s_sendto(conn_view.fd, buffer, length(buffer), 0,
+   pconn = h;
+   n = netc_sendto(conn_view.fd, buffer, length(buffer), 0,
                 ip, length(ip), port);
    if n < 0 then do;
-      if s_errno() = EAGAIN then do;
+      if netc_errno() = EAGAIN then do;
          call raise_timeout();
          return NET_TIMEOUT;
       end;
@@ -614,11 +614,11 @@ net_recvfrom: procedure (h, buffer, ip, port) returns (fixed bin(31));
    dcl port   fixed bin(31);
    dcl n      fixed bin(31);
 
-   base_ptr = h;
-   n = s_recvfrom(conn_view.fd, buffer, maxlength(buffer), 0,
+   pconn = h;
+   n = netc_recvfrom(conn_view.fd, buffer, maxlength(buffer), 0,
                   ip, maxlength(ip), addr(port));
    if n < 0 then do;
-      if s_errno() = EAGAIN then do;
+      if netc_errno() = EAGAIN then do;
          call raise_timeout();
          return NET_TIMEOUT;
       end;
