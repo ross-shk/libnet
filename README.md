@@ -46,7 +46,7 @@ internal procedures, and descriptive constants.
 | C bridge (system primitives) | `netc_` | `netc_socket`, `netc_recv`, `netc_sockopt` |
 | Public PL/I procedures | `net_` | `net_open`, `net_connect`, `net_read_until` |
 | Option codes | `NETOPT_*` | `NETOPT_REUSEADDR`, `NETOPT_KEEPALIVE`, `NETOPT_NODELAY` |
-| Status codes | `NET_*` | `NET_EOF`, `NET_TIMEOUT`, `NET_OVERFLOW` (oncode sentinels) |
+| Status codes | `NET_ERR_*` | `NET_ERR_EOF`, `NET_ERR_TIMEOUT`, `NET_ERR_OVERFLOW` (oncode sentinels) |
 | errno constants | `E*` | `EAGAIN`, `EBADF`, `ECONNREFUSED` (in `errno.inc`) |
 | POSIX mirror | as-is | `AF_INET`, `SOCK_STREAM`, `SHUT_WR`, `POLLIN` |
 | Conditions | lowercase | `net_error`, `net_timeout`, `net_eof`, `net_overflow` |
@@ -149,10 +149,10 @@ A procedure that can fail raises one of these conditions, intercepted with
 
 - `condition net_error` — hard error; `oncode()` = POSIX `errno`.
 - `condition net_timeout` — read/write timeout or `EAGAIN`/`EINTR`;
-  `oncode()` = `NET_TIMEOUT`.
-- `condition net_eof` — peer closed / end of stream; `oncode()` = `NET_EOF`.
+  `oncode()` = `NET_ERR_TIMEOUT`.
+- `condition net_eof` — peer closed / end of stream; `oncode()` = `NET_ERR_EOF`.
 - `condition net_overflow` — caller buffer filled mid-stream;
-  `oncode()` = `NET_OVERFLOW`.
+  `oncode()` = `NET_ERR_OVERFLOW`.
 
 Note `net_poll` does **not** raise `net_timeout` on a timeout — a poll timeout
 is the normal "nothing ready" result (returns 0).

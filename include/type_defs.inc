@@ -32,9 +32,9 @@
  * net_overflow conditions. POSIX errno (always positive) is carried by the
  * net_error condition. They are NOT return codes: libnet reports all failures
  * through conditions. */
-%replace NET_EOF       by -2;   /* peer closed / end of stream (net_eof)    */
-%replace NET_TIMEOUT   by -3;   /* read/write timeout or EAGAIN/EINTR      */
-%replace NET_OVERFLOW  by -4;   /* caller buffer exhausted mid-stream      */
+%replace NET_ERR_EOF       by -2;   /* peer closed / end of stream (net_eof)    */
+%replace NET_ERR_TIMEOUT   by -3;   /* read/write timeout or EAGAIN/EINTR      */
+%replace NET_ERR_OVERFLOW  by -4;   /* caller buffer exhausted mid-stream      */
 
 /* --- socket option codes for net_setopt (mapped to syscalls in C) ---------- */
 %replace NETOPT_REUSEADDR by 0;   /* SO_REUSEADDR */

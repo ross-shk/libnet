@@ -36,7 +36,7 @@ int netc_socket(int family, int type, int proto) {
   int fd = socket(family, type, proto);
   if (fd < 0)
     save_errno();
-  return fd;
+  return(fd);
 }
 
 int netc_bind(int fd, unsigned int port) {

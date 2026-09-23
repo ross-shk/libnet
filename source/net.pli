@@ -19,11 +19,11 @@
  *   A returned value is DATA only. A procedure that can fail raises one of:
  *
  *       condition(net_error)    hard error;          oncode() = errno
- *       condition(net_timeout)  timeout / EAGAIN;    oncode() = NET_TIMEOUT
- *       condition(net_eof)      peer closed;         oncode() = NET_EOF
- *       condition(net_overflow) caller buffer full;  oncode() = NET_OVERFLOW
+ *       condition(net_timeout)  timeout / EAGAIN;    oncode() = NET_ERR_TIMEOUT
+ *       condition(net_eof)      peer closed;         oncode() = NET_ERR_EOF
+ *       condition(net_overflow) caller buffer full;  oncode() = NET_ERR_OVERFLOW
  *
- * The conditions and NET_* sentinels are exported so caller ON-units can
+ * The conditions and NET_ERR_* sentinels are exported so caller ON-units can
  * reference them (see include/net.inc, which redeclares them for the
  * caller's scope).
  */
@@ -59,7 +59,7 @@ dcl net_overflow condition;
  * procedure declares a BASED view on its handle parameter (BASED on a
  * procedure parameter is now supported), so no base-pointer copy dance is
  * needed. */
-dcl 1 conn_rec controlled aligned,
+dcl 1 conn_rec controlled,
    2 fd               fixed bin(31),
    2 is_connected     bit(1),
    2 read_timeout     fixed bin(31),   /* ms; 0 = blocking */
@@ -82,17 +82,17 @@ end raise_err;
 
 /* Raise net_timeout (EAGAIN/EINTR/timeout expiry). */
 raise_timeout: procedure;
-   signal condition(net_timeout) set oncode(NET_TIMEOUT);
+   signal condition(net_timeout) set oncode(NET_ERR_TIMEOUT);
 end raise_timeout;
 
 /* Raise net_eof (peer closed / end of stream). */
 raise_eof: procedure;
-   signal condition(net_eof) set oncode(NET_EOF);
+   signal condition(net_eof) set oncode(NET_ERR_EOF);
 end raise_eof;
 
 /* Raise net_overflow (caller buffer exhausted mid-stream). */
 raise_overflow: procedure;
-   signal condition(net_overflow) set oncode(NET_OVERFLOW);
+   signal condition(net_overflow) set oncode(NET_ERR_OVERFLOW);
 end raise_overflow;
 
 /*--------------------------------------------------------------------------*/
@@ -126,11 +126,11 @@ net_open: procedure (family, type, proto) returns (pointer);
    if conn_rec.fd < 0 then do;
       call raise_err();
       free conn_rec;
-      return null();
+      return (null());
    end;
 
    h = addr(conn_rec);
-   return h;
+   return (h);
 end net_open;
 
 /*--------------------------------------------------------------------------*/
@@ -229,20 +229,20 @@ net_read: procedure (h, buffer, buflen) returns (fixed bin(31));
 
    if c.fd <= 0 then do;
       signal condition(net_error) set oncode(EBADF);
-      return 0;
+      return (0);
    end;
 
    got = netc_recv(c.fd, buffer, buflen, 0);
    if got = 0 then do;
       call raise_eof();
-      return 0;
+      return (0);
    end;
    if got < 0 then do;
       if netc_errno() = EAGAIN then call raise_timeout();
       else call raise_err();
-      return 0;
+      return (0);
    end;
-   return got;
+   return (got);
 end net_read;
 
 /* Read repeatedly until the peer closes or an error/timeout, appending all
@@ -269,21 +269,21 @@ net_read_all: procedure (h, buffer) returns (fixed bin(31));
       cap = min(NET_BUF_CAP, maxlength(buffer) - total);
       if cap <= 0 then do;            /* caller buffer full */
          call raise_overflow();
-         return total;
+         return (total);
       end;
       got = netc_recv(c.fd, tmp, cap, 0);
       if got = 0 then do;             /* EOF: normal end */
-         return total;
+         return (total);
       end;
       if got < 0 then do;
          if netc_errno() = EAGAIN then call raise_timeout();
          else call raise_err();
-         return total;
+         return (total);
       end;
       buffer = substr(buffer, 1, total) || substr(tmp, 1, got);
       total  = total + got;
    end; /* do while */
-   return total;
+   return (total);
 end net_read_all;
 
 /* Read until a delimiter character is seen, appending received bytes to
@@ -312,24 +312,24 @@ net_read_until: procedure (h, buffer, delim) returns (fixed bin(31));
       cap = min(NET_BUF_CAP, maxlength(buffer) - total);
       if cap <= 0 then do;            /* caller buffer full, no delimiter */
          call raise_overflow();
-         return 0;
+         return (0);
       end;
       got = netc_recv(c.fd, tmp, cap, 0);
       if got = 0 then do;
          call raise_eof();
-         return 0;
+         return (0);
       end;
       if got < 0 then do;
          if netc_errno() = EAGAIN then call raise_timeout();
          else call raise_err();
-         return 0;
+         return (0);
       end;
       buffer = substr(buffer, 1, total) || substr(tmp, 1, got);
       total  = total + got;
       pos = index(buffer, delim);
-      if pos > 0 then return pos;
+      if pos > 0 then return (pos);
    end; /* do while */
-   return 0;
+   return (0);
 end net_read_until;
 
 /*--------------------------------------------------------------------------*/
@@ -351,9 +351,9 @@ net_write: procedure (h, buffer) returns (fixed bin(31));
    if n < 0 then do;
       if netc_errno() = EAGAIN then call raise_timeout();
       else call raise_err();
-      return 0;
+      return (0);
    end;
-   return n;
+   return (n);
 end net_write;
 
 net_send: procedure (h, buffer, flags) returns (fixed bin(31));
@@ -367,9 +367,9 @@ net_send: procedure (h, buffer, flags) returns (fixed bin(31));
    if n < 0 then do;
       if netc_errno() = EAGAIN then call raise_timeout();
       else call raise_err();
-      return 0;
+      return (0);
    end;
-   return n;
+   return (n);
 end net_send;
 
 /* Send the whole buffer, retrying on partial sends.
@@ -396,12 +396,12 @@ net_send_all: procedure (h, buffer) returns (fixed bin(31));
       if n < 0 then do;
          if netc_errno() = EAGAIN then iterate;
          call raise_err();
-         return total;
+         return (total);
       end;
       if n = 0 then iterate;
       total = total + n;
    end; /* do while */
-   return total;
+   return (total);
 end net_send_all;
 
 /* A single send() with optional flags; no retry.
@@ -420,9 +420,9 @@ net_send_once: procedure (h, buffer, flags) returns (fixed bin(31));
    if n < 0 then do;
       if netc_errno() = EAGAIN then call raise_timeout();
       else call raise_err();
-      return 0;
+      return (0);
    end;
-   return n;
+   return (n);
 end net_send_once;
 
 /*--------------------------------------------------------------------------*/
@@ -443,7 +443,7 @@ net_poll: procedure (h, events, ms) returns (fixed bin(31));
 
    r = netc_poll(c.fd, events, ms);
    if r < 0 then call raise_err();
-   return r;
+   return (r);
 end net_poll;
 
 /* Set read/write timeouts (ms; 0 = blocking).
@@ -633,9 +633,9 @@ net_sendto: procedure (h, buffer, ip, port) returns (fixed bin(31));
    if n < 0 then do;
       if netc_errno() = EAGAIN then call raise_timeout();
       else call raise_err();
-      return 0;
+      return (0);
    end;
-   return n;
+   return (n);
 end net_sendto;
 
 /* Receive a datagram; the sender's address is returned in ip/port.
@@ -656,9 +656,9 @@ net_recvfrom: procedure (h, buffer, ip, port) returns (fixed bin(31));
    if n < 0 then do;
       if netc_errno() = EAGAIN then call raise_timeout();
       else call raise_err();
-      return 0;
+      return (0);
    end;
-   return n;
+   return (n);
 end net_recvfrom;
 
 /*--------------------------------------------------------------------------*/
@@ -674,17 +674,17 @@ net_listen: procedure (port, backlog) returns (pointer);
    fd = netc_socket(AF_INET, SOCK_STREAM, 0);
    if fd < 0 then do;
       call raise_err();
-      return null();
+      return (null());
    end;
    if netc_bind(fd, port) < 0 then do;
       call raise_err();
       call netc_close(fd);
-      return null();
+      return (null());
    end;
    if netc_listen(fd, backlog) < 0 then do;
       call raise_err();
       call netc_close(fd);
-      return null();
+      return (null());
    end;
 
    allocate conn_rec;
@@ -694,7 +694,7 @@ net_listen: procedure (port, backlog) returns (pointer);
    conn_rec.write_timeout = 0;
    conn_rec.in_len        = 0;
    h = addr(conn_rec);
-   return h;
+   return (h);
 end net_listen;
 
 /* Accept one connection on the server handle. Allocates a client connection
@@ -731,9 +731,9 @@ net_errtext: procedure returns (char(32));
 
    e = oncode();
    if e = 0        then return ('success');
-   if e = NET_EOF       then return ('end of stream');
-   if e = NET_TIMEOUT   then return ('timeout');
-   if e = NET_OVERFLOW  then return ('buffer overflow');
+   if e = NET_ERR_EOF       then return ('end of stream');
+   if e = NET_ERR_TIMEOUT   then return ('timeout');
+   if e = NET_ERR_OVERFLOW  then return ('buffer overflow');
    select;
       when (e = EINTR)         return ('interrupted');
       when (e = EBADF)         return ('bad file descriptor');

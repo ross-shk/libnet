@@ -19,9 +19,9 @@ intercepts with `ON`. `oncode()` recovers the detail.
 | Condition | Meaning | `oncode()` |
 |---|---|---|
 | `net_error` | hard error | POSIX errno (always positive) |
-| `net_timeout` | read/write timeout or `EAGAIN`/`EINTR` | `NET_TIMEOUT` (-3) |
-| `net_eof` | peer closed / end of stream | `NET_EOF` (-2) |
-| `net_overflow` | caller buffer filled mid-stream | `NET_OVERFLOW` (-4) |
+| `net_timeout` | read/write timeout or `EAGAIN`/`EINTR` | `NET_ERR_TIMEOUT` (-3) |
+| `net_eof` | peer closed / end of stream | `NET_ERR_EOF` (-2) |
+| `net_overflow` | caller buffer filled mid-stream | `NET_ERR_OVERFLOW` (-4) |
 
 Pointer-returning functions return the **null handle** on failure (after
 raising the appropriate condition).
@@ -30,9 +30,9 @@ raising the appropriate condition).
 
 | Constant | Value | Condition |
 |---|---|---|
-| `NET_EOF` | -2 | `net_eof` |
-| `NET_TIMEOUT` | -3 | `net_timeout` |
-| `NET_OVERFLOW` | -4 | `net_overflow` |
+| `NET_ERR_EOF` | -2 | `net_eof` |
+| `NET_ERR_TIMEOUT` | -3 | `net_timeout` |
+| `NET_ERR_OVERFLOW` | -4 | `net_overflow` |
 
 These are oncode values, **not** return codes. POSIX errno (always positive) is
 carried by the `net_error` condition. Note `net_poll` does **not** raise
