@@ -6,10 +6,12 @@ A connection-oriented socket library whose design inverts the usual split:
   perform — `socket/bind/listen/accept/connect/send/recv/close/shutdown/
   settimeout/setnonblock/poll/getpeername` plus an `errno` cache. Reached from
   PL/I through pli-llvm's by-value C FFI.
-- **most processing in PL/I** (`include/net_base.inc`, `include/net_server.inc`):
-  the connection pool, receive buffering, delimiter scanning, retry loops,
+- **most processing in PL/I** (`source/net.pli`, a compiled module): the
+  connection pool, receive buffering, delimiter scanning, retry loops,
   timeout and error policy — all in PL/I, using `CONTROLLED` storage and
-  pointer handles.
+  pointer handles. The module is archived into `libnet.a` alongside the C
+  bridge, so programs link it like any library instead of `%include`ing the
+  implementation.
 
 Callers hold only a `POINTER` handle; the connection structure layout is
 private to the library. This is the classic PL/I "fat runtime / task context"
@@ -48,7 +50,6 @@ internal procedures, and descriptive constants.
 | errno constants | `E*` | `EAGAIN`, `EBADF`, `ECONNREFUSED` (in `errno.inc`) |
 | POSIX mirror | as-is | `AF_INET`, `SOCK_STREAM`, `SHUT_WR`, `POLLIN` |
 | Conditions | lowercase | `net_error`, `net_timeout`, `net_eof`, `net_overflow` |
-| Internal pointers | role-based | `pconn` (connection handle), `psrv` (server handle) |
 | Internal helpers | lowercase verbs | `raise_err`, `raise_timeout`, `raise_eof`, `raise_overflow` |
 
 ## Layout
@@ -56,13 +57,11 @@ internal procedures, and descriptive constants.
 | Path | Contents |
 |---|---|
 | `source/c_bridge.c` | the ONLY C — thin syscall wrappers (`netc_*`) |
+| `source/net.pli` | the compiled PL/I module — client + server API, connection pool, error policy |
+| `include/net.inc` | interface include — constants + conditions + external `net_*` entries (`%include net;`) |
 | `include/type_defs.inc` | constants (`AF_*`, `SOCK_*`, `NET_*`), sizes |
 | `include/errno.inc` | POSIX errno as `%replace` named constants |
-| `include/c_bridge.inc` | by-value FFI declarations for the C bridge |
-| `include/net_errors.inc` | conditions (`net_error` / `net_timeout` / `net_eof` / `net_overflow`), `net_errtext` |
-| `include/net_base.inc` | client API (handle-based, multi-entry read/send) |
-| `include/net_server.inc` | server API (`net_listen` / `net_accept`) |
-| `include/net.inc` | master include — `%include net;` gets everything |
+| `include/c_bridge.inc` | by-value FFI declarations for the C bridge (module-only) |
 | `docs/api.md` | structured reference of every function (signature, returns, raises) |
 | `tests/c_bridge.c` | C regression test for the bridge bindings |
 | `examples/echo_server.pli` | echo server + client demo |
@@ -72,18 +71,24 @@ internal procedures, and descriptive constants.
 ## Build
 
 ```bash
-make            # builds libnet.a (the C bridge) + dist/net.inc
+make            # builds libnet.a (C bridge + compiled PL/I module) + dist/net.inc
 make test       # builds + runs the C bridge regression test (works today)
 make example    # tries the demo; shows the wishlist gaps today
 ```
 
-`make all` succeeds now. Compiling a *program* (which pulls in the PL/I library
-via `%include net;`) requires the pli-llvm features listed in
-[`WISHLIST.md`](WISHLIST.md). Once those land, build a program with:
+The library is a real linked module: `source/net.pli` is compiled once to
+`net.o` and archived into `libnet.a` beside the C bridge. A program pulls in
+only the **interface** (`%include net;`), then links:
 
 ```bash
 make build-prog SRC=examples/echo_server.pli OUT=echo_server
 ```
+
+`make test` (the C bridge) passes today. `make all` builds the C bridge, then
+compiles `source/net.pli` — which blocks on the pli-llvm features it uses
+(`char(*)`, `CONTROLLED`, `BASED` on parameters, based-member access,
+variable-length `SUBSTR`, and `dcl ... condition`); `make example` shows exactly
+where each blocks.
 
 ## API sketch
 
@@ -154,8 +159,9 @@ is the normal "nothing ready" result (returns 0).
 
 ## Status
 
-The implementation is written idiomatic and complete **as if the pli-llvm
-wishlist is already implemented**. Today `make all` builds the C bridge, and
-`make test` runs the `netc_*` bridge regression test (passing). The PL/I
-program path blocks on the wishlist; the deprecated original (Iron Spring
-`linux/386`) is preserved under `deprecated/`.
+The library is written idiomatic and complete **as if the pli-llvm wishlist is
+already implemented**, as a compiled module rather than `%include`d source.
+`make test` runs the `netc_*` bridge regression test (passing); `make all`
+builds the C bridge and then attempts the PL/I module compile, which blocks on
+the wishlist. The *program* path blocks too; the deprecated original (Iron
+Spring `linux/386`) is preserved under `deprecated/`.

@@ -2,7 +2,7 @@
     Module:  resolve
     Purpose: show how net_resolve maps a host name to a dotted-quad string.
     Usage:   resolve <host>
-    Requires the pli-llvm wishlist (see WISHLIST.md); blocks today. */
+    Compiles against the compiled net module (link -lnet + libpli.a). */
 
  resolve: procedure options(main);
     %include net;

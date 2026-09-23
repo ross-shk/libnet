@@ -4,8 +4,7 @@
              The server listens on 127.0.0.1:8090, accepts one client, and
              echoes back each line it reads. EOF ends the loop.
     Usage:   echo_server            (blocks until a client connects)
-    Requires the pli-llvm wishlist (see WISHLIST.md); blocks today.
- */
+    Compiles against the compiled net module (link -lnet + libpli.a). */
 
  echo_server: procedure options(main);
     %include net;

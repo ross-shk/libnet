@@ -4,7 +4,7 @@
              A compact, single-purpose example of the handle-based API and
              ON-condition error model.
     Usage:   client <host> <port> <message>
-    Requires the pli-llvm wishlist (see WISHLIST.md); blocks today. */
+    Compiles against the compiled net module (link -lnet + libpli.a). */
 
  client: procedure options(main);
     %include net;

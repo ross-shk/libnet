@@ -12,13 +12,20 @@ libnet is a **thin-C / PL/I-heavy** socket library:
 
 - **minimal C** (`source/c_bridge.c`): only the raw syscalls PL/I cannot
   perform, reached through pli-llvm's by-value C FFI.
-- **most processing in PL/I**: the connection pool, receive buffering,
-  delimiter scanning, retry loops, timeout and error policy, and all protocol
-  framing live in the PL/I library using `CONTROLLED` storage + pointer
-  handles.
+- **most processing in PL/I** (`source/net.pli`): the connection pool,
+  receive buffering, delimiter scanning, retry loops, timeout and error
+  policy, and all protocol framing live in a single compiled PL/I module
+  using `CONTROLLED` storage + pointer handles.
 
-Callers hold only a `POINTER` handle; the connection structure layout is
-private to the library.
+The module is compiled once (`net.o`) and archived into `libnet.a` beside the
+C bridge. Callers hold only a `POINTER` handle; the connection structure
+layout is private to the library. `include/net.inc` is an **interface** —
+constants, conditions, and external `entry` declarations only — so programs
+`%include net;`, link `-lnet`, and never paste the implementation in.
+
+For this module model to compile, pli-llvm must serve the features below.
+Items 2–5 let the module own its private state and handle-based API without
+`%include`-inlining or the workarounds a single-source build tolerated.
 
 ---
 

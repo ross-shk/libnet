@@ -3,6 +3,11 @@
 Structured reference for every public function in the PL/I library, written so
 an agent (or human) can call the library correctly from the signatures alone.
 
+The library is a **compiled PL/I module** (`source/net.pli`) archived into
+`libnet.a`. A program does `%include net;` (which supplies the constants, the
+four conditions, and the external `net_*` entry declarations — not the
+implementation), then links `-lnet + libpli.a` and calls the entries below.
+
 ## Error model
 
 libnet reports **all** failures through conditions (the idiomatic PL/I
@@ -34,7 +39,7 @@ carried by the `net_error` condition. Note `net_poll` does **not** raise
 `net_timeout` on a timeout — a poll timeout is the normal "nothing ready"
 result (returns 0).
 
-## Client (net_base)
+## Client (net module — client procedures)
 
 All client procedures take a handle from `net_open` unless noted.
 
@@ -66,7 +71,7 @@ All client procedures take a handle from `net_open` unless noted.
 | `net_resolve` | `(host, ip)` | — (call; fills ip) | `net_error` |
 | `net_strerror` | `(e, buf)` | — (call; fills buf) | — |
 
-## Server (net_server)
+## Server (net module — server procedures)
 
 | Function | Signature | Returns | Raises |
 |---|---|---|---|

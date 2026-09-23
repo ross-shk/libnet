@@ -7,7 +7,7 @@
  *
  * The connection object is owned by the library (CONTROLLED storage); callers
  * hold only a POINTER handle. The structure layout is private to the library
- * and is declared in net_base.inc / net_server.inc, not here.
+ * and is declared in source/net.pli, not here.
  */
 
 /* --- address family / socket type / protocol (POSIX) ---------------------- */
@@ -31,7 +31,7 @@
 /* These are the oncode values carried by the net_timeout / net_eof /
  * net_overflow conditions. POSIX errno (always positive) is carried by the
  * net_error condition. They are NOT return codes: libnet reports all failures
- * through conditions (see net_errors.inc). */
+ * through conditions. */
 %replace NET_EOF       by -2;   /* peer closed / end of stream (net_eof)    */
 %replace NET_TIMEOUT   by -3;   /* read/write timeout or EAGAIN/EINTR      */
 %replace NET_OVERFLOW  by -4;   /* caller buffer exhausted mid-stream      */
