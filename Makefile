@@ -16,7 +16,7 @@
 # and then compiles source/net.pli, which blocks on the pli-llvm wishlist for
 # the features it uses (see WISHLIST.md). `make example` shows exactly where.
 
-PLI_LLVM ?= ../plic/pli-llvm/build
+PLI_LLVM ?= /usr/local/bin
 PLIC     ?= $(PLI_LLVM)/plic
 RTLIB    ?= $(PLI_LLVM)/libpli.a
 CC       ?= cc
@@ -65,7 +65,7 @@ build-prog: libnet.a
 # Diagnostic: attempt to compile each example against the interface include
 # and show the wishlist gap. The examples block where the program path needs
 # pli-llvm features (see WISHLIST.md); the module build is a separate step.
-EXAMPLES = examples/echo_server.pli examples/client.pli examples/resolve.pli
+EXAMPLES = examples/echo_server.pli examples/client.pli examples/resolve.pli examples/fetch.pli
 example:
 	@for e in $(EXAMPLES); do \
 	  echo "== compiling $$e (expect wishlist gaps) =="; \
