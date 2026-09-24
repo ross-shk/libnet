@@ -67,6 +67,7 @@ internal procedures, and descriptive constants.
 | `examples/echo_server.pli` | echo server + client demo |
 | `examples/client.pli` | minimal TCP client |
 | `examples/resolve.pli` | DNS resolution demo |
+| `examples/fetch.pli` | fetch example.com into an expandable buffer |
 
 ## Build
 
