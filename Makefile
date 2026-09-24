@@ -16,9 +16,9 @@
 # and then compiles source/net.pli, which blocks on the pli-llvm wishlist for
 # the features it uses (see WISHLIST.md). `make example` shows exactly where.
 
-PLI_LLVM ?= /usr/local/bin
-PLIC     ?= $(PLI_LLVM)/plic
-RTLIB    ?= $(PLI_LLVM)/libpli.a
+PLI_LLVM ?= /usr/local
+PLIC     ?= $(PLI_LLVM)/bin/plic
+RTLIB    ?= $(PLI_LLVM)/lib/libpli.a
 CC       ?= cc
 AR       ?= ar
 CFLAGS   ?= -O2 -Wall
