@@ -1,52 +1,58 @@
- /* echo_server.pli — echo server + client demo for libnet (PL/I-centric).
+ /* echo_server.pli — echo server + client demo for libnet
+  * (PL/I-centric).
     Module:  echo_server
-    Purpose: demonstrate the handle-based API and ON-condition error model.
-             The server listens on 127.0.0.1:8090, accepts one client, and
+    Purpose: demonstrate the handle-based API and ON-condition error 
+        model.
+             The server listens on 127.0.0.1:8090, accepts one client,
+                 and
              echoes back each line it reads. EOF ends the loop.
     Usage:   echo_server            (blocks until a client connects)
     Compiles against the compiled net module (link -lnet + libpli.a). */
 
  echo_server: procedure options(main);
-    %include net;
+   %include net;
 
-    dcl server pointer;
-    dcl client pointer;
-    dcl line    char(1024);
-    dcl got     fixed bin(31);
-    dcl done    bit(1);
+   dcl server pointer;
+   dcl client pointer;
+   dcl line    char(1024);
+   dcl got     fixed bin(31);
+   dcl done    bit(1);
 
-    /* ON units are kept to a single action, and each re-arms the condition
-     * so a failure inside the unit does not recurse (style guide). Errors
-     * and timeouts abort; EOF is the normal end of the echo loop. */
-    on condition(net_error) begin;
-       on condition(net_error) system;
-       put skip list('net error, code=', oncode());
-       stop;
-    end; /* on condition(net_error) */
-    on condition(net_timeout) begin;
-       on condition(net_timeout) system;
-       put skip list('net timeout');
-       stop;
-    end; /* on condition(net_timeout) */
-    on condition(net_eof) done = '1'b;
+   /* ON units are kept to a single action, and each re-arms the
+    * condition
+    * so a failure inside the unit does not recurse (style guide). 
+        Errors
+    * and timeouts abort; EOF is the normal end of the echo loop. */
+   on condition(net_error) begin;
+     on condition(net_error) system;
+     put skip list('net error, code=', oncode());
+     stop;
+   end; /* on condition(net_error) */
+   on condition(net_timeout) begin;
+     on condition(net_timeout) system;
+     put skip list('net timeout');
+     stop;
+   end; /* on condition(net_timeout) */
+   on condition(net_eof) done = '1'b;
 
-    /* listen on 127.0.0.1:8090 */
-    server = net_listen(8090, 5);
-    if server = null() then stop;
-    put skip list('listening on 8090');
+   /* listen on 127.0.0.1:8090 */
+   server = net_listen(8090, 5);
+   if server = null() then stop;
+   put skip list('listening on 8090');
 
-    /* accept one client */
-    call net_accept(server, client);
-    put skip list('client accepted');
+   /* accept one client */
+   call net_accept(server, client);
+   put skip list('client accepted');
 
-    /* echo loop: read a line (net_eof ends it), write it back */
-    done = '0'b;
-    do while (^done);
-       got = net_read_until(client, line, '0A'x);   /* newline delimiter */
-       call net_write(client, substr(line, 1, got));
-    end; /* do while */
+   /* echo loop: read a line (net_eof ends it), write it back */
+   done = '0'b;
+   do while (^done);
+      got = net_read_until(client, line,
+         '0A'x);   /* newline delimiter */
+      call net_write(client, substr(line, 1, got));
+   end; /* do while */
 
-    call net_close(client);
-    call net_close(server);
-    put skip list('server done');
+   call net_close(client);
+   call net_close(server);
+   put skip list('server done');
  end echo_server;

@@ -1,68 +1,72 @@
-   /* fetch.pli — fetch http://example.com/ into an expandable buffer.
-      Module:  fetch
-      Purpose: connect to example.com port 80, send a minimal HTTP/1.0
-               GET / request, and read the whole reply via net_read_all
-               which auto-doubles its CONTROLLED char(*) buffer until EOF.
-               Every other failure arrives as a condition.
-      Usage:   fetch                        (no arguments; host is fixed)
-      Build:   make                                   (build libnet.a once)
-               make build-prog SRC=examples/fetch.pli OUT=fetch
-               ./fetch
-      Compiles against the compiled net module (link -lnet + libpli.a):
-               build-prog compiles this file with
-               $(PLIC) -c examples/fetch.pli -I include, then links
-               fetch.o with libnet.a and libpli.a. */
+ /* fetch.pli — fetch http://example.com/ into an expandable buffer.
+    Module:  fetch
+    Purpose: connect to example.com port 80, send a minimal HTTP/1.0
+             GET / request, and read the whole reply via net_read_all
+             which auto-doubles its CONTROLLED char(*) buffer until 
+                 EOF.
+             Every other failure arrives as a condition.
+    Usage:   fetch                        (no arguments; host is 
+        fixed)
+    Build:   make                                   (build libnet.a 
+        once)
+             make build-prog SRC=examples/fetch.pli OUT=fetch
+             ./fetch
+    Compiles against the compiled net module (link -lnet + libpli.a):
+             build-prog compiles this file with
+             $(PLIC) -c examples/fetch.pli -I include, then links
+             fetch.o with libnet.a and libpli.a. */
 
-   fetch: procedure options(main);
-      %include net;
+ fetch: procedure options(main);
+   %include net;
 
-      dcl conn  pointer;
-      dcl len   fixed bin(31);         /* total bytes read */
-      dcl sent  fixed bin(31);
-      dcl req   char(56);
-      dcl body  char(*) controlled;    /* auto-expanding buffer */
+   dcl conn  pointer;
+   dcl len   fixed bin(31);         /* total bytes read */
+   dcl sent  fixed bin(31);
+   dcl req   char(56);
+   dcl body  char(*) controlled;    /* auto-expanding buffer */
 
-      /* ON units: each re-arms so a failure inside does not recurse. */
-      on condition(net_error) begin;
-         on condition(net_error) system;
-         put skip list('error:', net_errtext());
-         stop;
-      end; /* on condition(net_error) */
-      on condition(net_timeout) begin;
-         on condition(net_timeout) system;
-         put skip list('timeout:', net_errtext());
-         stop;
-      end; /* on condition(net_timeout) */
-      on condition(net_overflow) begin;
-         on condition(net_overflow) system;
-         put skip list('overflow');
-         stop;
-      end; /* on condition(net_overflow) */
+   /* ON units: each re-arms so a failure inside does not recurse. */
+   on condition(net_error) begin;
+     on condition(net_error) system;
+     put skip list('error:', net_errtext());
+     stop;
+   end;  /* on condition(net_error) */
+   on condition(net_timeout) begin;
+     on condition(net_timeout) system;
+     put skip list('timeout:', net_errtext());
+     stop;
+   end;  /* on condition(net_timeout) */
+   on condition(net_overflow) begin;
+     on condition(net_overflow) system;
+     put skip list('overflow');
+     stop;
+   end;  /* on condition(net_overflow) */
 
-      allocate body;                    /* initial extent set by compiler */
+   allocate body;  /* initial extent set by compiler */
 
-      conn = net_open(AF_INET, SOCK_STREAM, 0);
-      if conn = null() then stop;
-      call net_set_timeout(conn, 10000, 10000);
-      call net_connect(conn, 'example.com', 80);
+   conn = net_open(AF_INET, SOCK_STREAM, 0);
+   if conn = null() then stop;
+   call net_set_timeout(conn, 10000, 10000);
+   call net_connect(conn, 'example.com', 80);
 
-      /* Exactly 56 bytes: 14 + 2 + 17 + 2 + 17 + 2 + 2, so no blank
-       * padding goes on the wire. '0D0A'x is the CRLF pair. */
-      req = 'GET / HTTP/1.0' || '0D0A'x || 'Host: example.com' || '0D0A'x
-         || 'Connection: close' || '0D0A'x || '0D0A'x;
-      sent = net_send_all(conn, req);
-      put skip list('sent', sent, 'request bytes');
+   /* Exactly 56 bytes: 14 + 2 + 17 + 2 + 17 + 2 + 2, so no blank
+    * padding goes on the wire. '0D0A'x is the CRLF pair. */
+   req = 'GET / HTTP/1.0' || '0D0A'x || 'Host: example.com' || 
+       '0D0A'x
+      || 'Connection: close' || '0D0A'x || '0D0A'x;
+   sent = net_send_all(conn, req);
+   put skip list('sent', sent, 'request bytes');
 
-      /* Single call: net_read_all reads until EOF, auto-doubling the
-       * CONTROLLED char(*) buffer whenever a chunk would not fit.
-       * Overflow signals net_overflow (buffer hit MAXLENGTH). */
-      len = net_read_all(conn, body);
+   /* Single call: net_read_all reads until EOF, auto-doubling the
+    * CONTROLLED char(*) buffer whenever a chunk would not fit.
+    * Overflow signals net_overflow (buffer hit MAXLENGTH). */
+   len = net_read_all(conn, body);
 
-      put skip list('fetched', len, 'bytes from example.com');
-      if len > 0 then
-         put skip list(substr(body, 1, min(len, 500)));
+   put skip list('fetched', len, 'bytes from example.com');
+   if len > 0 then
+      put skip list(substr(body, 1, min(len, 500)));
 
-      free body;
-      call net_close(conn);
-      put skip list('done');
-   end fetch;
+   free body;
+   call net_close(conn);
+   put skip list('done');
+ end fetch;

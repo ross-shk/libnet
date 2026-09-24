@@ -1,7 +1,8 @@
  /* client.pli — minimal TCP client for libnet.
     Module:  client
     Purpose: connect to a host:port, write a line, read a reply, close.
-             A compact, single-purpose example of the handle-based API and
+             A compact,
+                 single-purpose example of the handle-based API and
              ON-condition error model.
     Usage:   client <host> <port> <message>
     Compiles against the compiled net module (link -lnet + libpli.a). */

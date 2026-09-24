@@ -1,8 +1,10 @@
- /* errno.inc — POSIX errno constants as %replace, after the Iron Spring
-  * lib/include/errno.inc idiom. Named constants keep libnet's error handling
-  * readable and match the values returned by the C bridge's cached errno.
+ /* errno.inc — POSIX errno constants as %replace, after the
+  * Iron Spring lib/include/errno.inc idiom. Named
+  * constants keep libnet's error handling readable and
+  * match the values returned by the C bridge's cached errno.
   *
-  * Only the subset relevant to sockets is defined here; add more as needed.
+  * Only the subset relevant to sockets is defined here; add more as
+   * needed.
   */
 
  %replace EPERM      by   1;  /* Operation not permitted */

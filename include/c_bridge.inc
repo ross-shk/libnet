@@ -1,11 +1,15 @@
  /* c_bridge.inc — by-value FFI declarations for the thin C bridge.
   *
-  * Reached through pli-llvm's OPTIONS(LINKAGE(SYSTEM)) / OPTIONS(BYVALUE) C
-  * ABI: scalar fixed bin(31) / float params pass by value, character buffers
-  * pass as char* with an explicit length, pointers pass by value. No NUL
+  * Reached through pli-llvm's OPTIONS(LINKAGE(SYSTEM)) /
+   * OPTIONS(BYVALUE) C
+  * ABI: scalar fixed bin(31) / float params pass by value, character
+   * buffers
+  * pass as char* with an explicit length, pointers pass by value. No
+   * NUL
   * termination is assumed (PL/I CHAR is blank-padded).
   *
-  * These are the ONLY functions implemented in C; all policy lives in PL/I.
+  * These are the ONLY functions implemented in C; all policy lives in
+   * PL/I.
   */
 
  /* socket / listen / accept */
@@ -25,17 +29,22 @@
      returns (fixed bin(31))
      options (linkage(system)) external ('netc_accept');
 
- /* connect: host is a char* with an explicit length; port is by value */
- dcl netc_connect entry (fixed bin(31), char(*), fixed bin(31), fixed bin(31))
+ /* connect: host is a char* with an explicit length; port is by value
+  * */
+ dcl netc_connect entry (fixed bin(31), char(*), fixed bin(31),
+     fixed bin(31))
      returns (fixed bin(31))
      options (linkage(system)) external ('netc_connect');
 
- /* send / recv: buffer is char* with an explicit length; flags by value */
- dcl netc_send entry (fixed bin(31), char(*), fixed bin(31), fixed bin(31))
+ /* send / recv: buffer is char* with an explicit length; flags by
+  * value */
+ dcl netc_send entry (fixed bin(31), char(*), fixed bin(31),
+     fixed bin(31))
      returns (fixed bin(31))
      options (linkage(system)) external ('netc_send');
 
- dcl netc_recv entry (fixed bin(31), char(*), fixed bin(31), fixed bin(31))
+ dcl netc_recv entry (fixed bin(31), char(*), fixed bin(31),
+     fixed bin(31))
      returns (fixed bin(31))
      options (linkage(system)) external ('netc_recv');
 
@@ -105,12 +114,14 @@
      options (linkage(system)) external ('netc_strerror');
 
  /* UDP datagrams */
- dcl netc_sendto entry (fixed bin(31), char(*), fixed bin(31), fixed bin(31),
+ dcl netc_sendto entry (fixed bin(31), char(*), fixed bin(31),
+     fixed bin(31),
                      char(*), fixed bin(31), fixed bin(31))
      returns (fixed bin(31))
      options (linkage(system)) external ('netc_sendto');
 
- dcl netc_recvfrom entry (fixed bin(31), char(*), fixed bin(31), fixed bin(31),
+ dcl netc_recvfrom entry (fixed bin(31), char(*), fixed bin(31),
+     fixed bin(31),
                        char(*), fixed bin(31), pointer)
      returns (fixed bin(31))
      options (linkage(system)) external ('netc_recvfrom');
