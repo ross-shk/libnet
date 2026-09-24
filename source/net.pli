@@ -1,4 +1,4 @@
- /* net.pli — libnet client + server library, compiled PL/I module.
+ /* net.pli - libnet client + server library, compiled PL/I module.
   *
   * Module:  net
   * Author:  libnet
@@ -10,7 +10,7 @@
    * error
   *          policy. Callers link against the exported net_* entries
    * and never
-  *          see the connection layout — they hold only a POINTER
+  *          see the connection layout - they hold only a POINTER
    * handle.
   *
   * This module assumes the pli-llvm features libnet is designed
@@ -22,7 +22,7 @@
    * logic no
   * longer has to be %included inline into each program.
   *
-  * Error handling (conditions-only — the idiomatic PL/I mechanism):
+  * Error handling (conditions-only - the idiomatic PL/I mechanism):
   *   libnet reports ALL failures through conditions, never return
    * codes.
   *   A returned value is DATA only. A procedure that can fail raises
@@ -90,7 +90,7 @@
     2 in_len           fixed bin(31);   /* bytes currently buffered */
 
  /*--------------------------------------------------*/
- /* Internal error helpers (raise conditions — the only error channel)
+ /* Internal error helpers (raise conditions - the only error channel)
   *       */
  /*--------------------------------------------------*/
  /* Raise net_error with the current errno, unless 0. */
@@ -135,7 +135,7 @@
    dcl proto  fixed bin(31);
    dcl h      pointer;
 
-   allocate conn_rec;                /* implicit push — CONTROLLED */
+   allocate conn_rec;                /* implicit push - CONTROLLED */
    conn_rec.fd            = 0;
    conn_rec.is_connected  = '0'b;
    conn_rec.read_timeout  = 0;
@@ -318,7 +318,7 @@
      prevlen = length(buffer);
      buffer  = buffer || substr(tmp, 1, got);
      if length(buffer) = prevlen then do;
-       /* Concatenation did not grow — buffer is at 
+       /* Concatenation did not grow - buffer is at 
            implementation ceiling */
        done   = '1'b;
        call raise_overflow();

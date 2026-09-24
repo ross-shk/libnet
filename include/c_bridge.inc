@@ -1,4 +1,4 @@
- /* c_bridge.inc — by-value FFI declarations for the thin C bridge.
+ /* c_bridge.inc - by-value FFI declarations for the thin C bridge.
   *
   * Reached through pli-llvm's OPTIONS(LINKAGE(SYSTEM)) /
    * OPTIONS(BYVALUE) C

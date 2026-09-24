@@ -1,4 +1,4 @@
- /* type_defs.inc — libnet shared types and constants.
+ /* type_defs.inc - libnet shared types and constants.
   *
   * Module:  type_defs
   * Purpose: socket-domain constants, libnet status codes, and buffer

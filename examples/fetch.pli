@@ -1,4 +1,4 @@
- /* fetch.pli — fetch http://example.com/ into an expandable buffer.
+ /* fetch.pli - fetch http://example.com/ into an expandable buffer.
     Module:  fetch
     Purpose: connect to example.com port 80, send a minimal HTTP/1.0
              GET / request, and read the whole reply via net_read_all

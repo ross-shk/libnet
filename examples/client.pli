@@ -1,4 +1,4 @@
- /* client.pli — minimal TCP client for libnet.
+ /* client.pli - minimal TCP client for libnet.
     Module:  client
     Purpose: connect to a host:port, write a line, read a reply, close.
              A compact,

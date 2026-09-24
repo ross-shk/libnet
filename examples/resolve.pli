@@ -1,4 +1,4 @@
- /* resolve.pli — DNS resolution example for libnet.
+ /* resolve.pli - DNS resolution example for libnet.
     Module:  resolve
     Purpose: show how net_resolve maps a host name to a dotted-quad 
         string.

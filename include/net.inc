@@ -1,4 +1,4 @@
- /* net.inc — libnet interface include.
+ /* net.inc - libnet interface include.
  *
  * Module:  net
  * Purpose: supply the whole libnet surface to a program WITHOUT
@@ -20,7 +20,7 @@
   * and
  * calls the net_* entries directly. No connection logic is compiled
   * into the
- * program — it lives once in the library module.
+ * program - it lives once in the library module.
  */
 
  %include errno;

@@ -1,4 +1,4 @@
- /* errno.inc — POSIX errno constants as %replace, after the
+ /* errno.inc - POSIX errno constants as %replace, after the
   * Iron Spring lib/include/errno.inc idiom. Named
   * constants keep libnet's error handling readable and
   * match the values returned by the C bridge's cached errno.

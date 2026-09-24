@@ -1,4 +1,4 @@
- /* echo_server.pli — echo server + client demo for libnet
+ /* echo_server.pli - echo server + client demo for libnet
   * (PL/I-centric).
     Module:  echo_server
     Purpose: demonstrate the handle-based API and ON-condition error 
