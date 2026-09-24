@@ -253,38 +253,40 @@
   *
   * raises:   condition(net_timeout), condition(net_error), or
   *           condition(net_overflow) if the caller buffer filled before EOF. */
- net_read_all: procedure (h, buffer) returns (fixed bin(31));
-    dcl h      pointer;
-    dcl 1 c    based(h) like conn_rec;
-    dcl buffer char(*);
-    dcl tmp    char(NET_BUF_CAP);
-    dcl total  fixed bin(31);
-    dcl got    fixed bin(31);
-    dcl cap    fixed bin(31);
-    dcl done   bit(1);
+   net_read_all: procedure (h, buffer) returns (fixed bin(31));
+      dcl h       pointer;
+      dcl 1 c     based(h) like conn_rec;
+      dcl buffer  char(*) controlled;
+      dcl tmp     char(NET_BUF_CAP);
+      dcl total   fixed bin(31);
+      dcl got     fixed bin(31);
+      dcl prevlen fixed bin(31);
+      dcl done    bit(1);
 
-    total = 0;
-    done  = '0'b;
-    do while (^done);
-       cap = min(NET_BUF_CAP, maxlength(buffer) - total);
-       if cap <= 0 then do;            /* caller buffer full */
-          call raise_overflow();
-          return (total);
-       end;
-       got = netc_recv(c.fd, tmp, cap, 0);
-       if got = 0 then do;             /* EOF: normal end */
-          return (total);
-       end;
-       if got < 0 then do;
-          if netc_errno() = EAGAIN then call raise_timeout();
-          else call raise_err();
-          return (total);
-       end;
-       buffer = substr(buffer, 1, total) || substr(tmp, 1, got);
-       total  = total + got;
-    end; /* do while */
-    return (total);
- end net_read_all;
+      total = 0;
+      done  = '0'b;
+      do while (^done);
+         got = netc_recv(c.fd, tmp, NET_BUF_CAP, 0);
+         if got = 0 then do;             /* EOF: normal end */
+            return (total);
+         end;
+         if got < 0 then do;
+            if netc_errno() = EAGAIN then call raise_timeout();
+            else call raise_err();
+            return (total);
+         end;
+         prevlen = length(buffer);
+         buffer  = buffer || substr(tmp, 1, got);
+         if length(buffer) = prevlen then do;
+            /* Concatenation did not grow — buffer is at implementation ceiling */
+            done   = '1'b;
+            call raise_overflow();
+            return (total);
+         end;
+         total = length(buffer);
+      end; /* do while */
+      return (total);
+   end net_read_all;
 
  /* Read until a delimiter character is seen, appending received bytes to
   * buffer.
