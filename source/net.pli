@@ -116,6 +116,19 @@
    signal condition(net_overflow) set oncode(NET_ERR_OVERFLOW);
  end raise_overflow;
 
+ /* Find the content length of a blank-padded C output buffer. */
+ trimmed_length: procedure (text) returns (fixed bin(31));
+   dcl text char(*);
+   dcl n    fixed bin(31);
+
+   n = length(text);
+   do while (n > 0);
+     if substr(text, n, 1) ^= ' ' then return (n);
+     n = n - 1;
+   end;
+   return (0);
+ end trimmed_length;
+
  /*--------------------------------------------------*/
  /* net_open                                                          
   *        */
@@ -260,6 +273,7 @@
    dcl buffer char(NET_BUF_CAP) varying;
    dcl buflen fixed bin(31);
    dcl got    fixed bin(31);
+   dcl tmp    char(NET_BUF_CAP);
 
    hp = h;
    if c.fd <= 0 then do;
@@ -267,7 +281,7 @@
       return (0);
    end;
 
-   got = netc_recv(c.fd, buffer, buflen, 0);
+   got = netc_recv(c.fd, tmp, min(buflen, NET_BUF_CAP), 0);
    if got = 0 then do;
       call raise_eof();
       return (0);
@@ -277,6 +291,7 @@
       else call raise_err();
       return (0);
    end;
+   buffer = substr(tmp, 1, got);
    return (got);
  end net_read;
 
@@ -295,7 +310,7 @@
    dcl h       pointer;
    dcl hp      pointer;
    dcl 1 c     based(hp) like conn_rec;
-   dcl buffer  char(NET_BUF_CAP) varying controlled;
+   dcl buffer  char(NET_BUF_CAP) varying;
    dcl tmp     char(NET_BUF_CAP);
    dcl total   fixed bin(31);
    dcl got     fixed bin(31);
@@ -355,7 +370,7 @@
    total = 0;
    done  = '0'b;
    do while (^done);
-     cap = min(NET_BUF_CAP, maxlength(buffer) - total);
+     cap = NET_BUF_CAP - total;
      if cap <= 0 then do;   /* caller buffer full, no delimiter */
        call raise_overflow();
        return (0);
@@ -589,10 +604,17 @@
    dcl ip   char(16) varying;
    dcl port fixed bin(31);
    dcl rc   fixed bin(31);
+   dcl n    fixed bin(31);
+   dcl tmp  char(16);
 
    hp = h;
-   rc = netc_getpeername(c.fd, ip, maxlength(ip), addr(port));
+   rc = netc_getpeername(c.fd, tmp, 16, addr(port));
    if rc < 0 then call raise_err();
+   else do;
+     n = trimmed_length(tmp);
+     if n = 0 then ip = '';
+     else ip = substr(tmp, 1, n);
+   end;
  end net_peer;
 
  /* Fill ip/port with the local (bound) address.
@@ -604,10 +626,17 @@
    dcl ip   char(16) varying;
    dcl port fixed bin(31);
    dcl rc   fixed bin(31);
+   dcl n    fixed bin(31);
+   dcl tmp  char(16);
 
    hp = h;
-   rc = netc_getsockname(c.fd, ip, maxlength(ip), addr(port));
+   rc = netc_getsockname(c.fd, tmp, 16, addr(port));
    if rc < 0 then call raise_err();
+   else do;
+     n = trimmed_length(tmp);
+     if n = 0 then ip = '';
+     else ip = substr(tmp, 1, n);
+   end;
  end net_local;
 
  /*--------------------------------------------------*/
@@ -620,9 +649,16 @@
    dcl host char(NET_HOST_MAX) varying;
    dcl ip   char(16) varying;
    dcl rc   fixed bin(31);
+   dcl n    fixed bin(31);
+   dcl tmp  char(16);
 
-   rc = netc_resolve(host, length(host), ip, maxlength(ip));
+   rc = netc_resolve(host, length(host), tmp, 16);
    if rc < 0 then call raise_err();
+   else do;
+     n = trimmed_length(tmp);
+     if n = 0 then ip = '';
+     else ip = substr(tmp, 1, n);
+   end;
  end net_resolve;
 
  /*--------------------------------------------------*/
@@ -633,7 +669,12 @@
  net_strerror: procedure (e, buf);
    dcl e   fixed bin(31);
    dcl buf char(NET_BUF_CAP) varying;
-   call netc_strerror(e, buf, maxlength(buf));
+   dcl n   fixed bin(31);
+   dcl tmp char(NET_BUF_CAP);
+   call netc_strerror(e, tmp, NET_BUF_CAP);
+   n = trimmed_length(tmp);
+   if n = 0 then buf = '';
+   else buf = substr(tmp, 1, n);
  end net_strerror;
 
  /*--------------------------------------------------*/
@@ -737,15 +778,21 @@
    dcl ip     char(16) varying;
    dcl port   fixed bin(31);
    dcl n      fixed bin(31);
+   dcl alen   fixed bin(31);
+   dcl rbuf   char(NET_BUF_CAP);
+   dcl raddr  char(16);
 
    hp = h;
-   n = netc_recvfrom(c.fd, buffer, maxlength(buffer), 0,
-                  ip, maxlength(ip), addr(port));
+   n = netc_recvfrom(c.fd, rbuf, NET_BUF_CAP, 0, raddr, 16, addr(port));
    if n < 0 then do;
       if netc_errno() = EAGAIN then call raise_timeout();
       else call raise_err();
       return (0);
    end;
+   buffer = substr(rbuf, 1, n);
+   alen = trimmed_length(raddr);
+   if alen = 0 then ip = '';
+   else ip = substr(raddr, 1, alen);
    return (n);
  end net_recvfrom;
 

@@ -1,19 +1,21 @@
  /* client.pli - minimal TCP client for libnet.
     Module:  client
-    Purpose: connect to a host:port, write a line, read a reply, close.
-             A compact,
-                 single-purpose example of the handle-based API and
-             ON-condition error model.
-    Usage:   client <host> <port> <message>
-    Compiles against the compiled net module (link -lnet + libpli.a). */
+    Purpose: connect to localhost:8090, exchange one line, and close.
+    Compiles against the compiled net module. */
 
  client: procedure options(main);
     %include net;
 
     dcl conn pointer;
-    dcl reply char(1024);
-    dcl msg   char(256);
+    dcl reply char(NET_BUF_CAP) varying;
+    dcl msg   char(NET_BUF_CAP) varying;
     dcl n     fixed bin(31);
+    dcl host  char(NET_HOST_MAX) varying;
+    dcl port  fixed bin(31);
+
+    host = 'localhost';
+    port = 8090;
+    msg = 'Hello from PL/I!' || '0A'x;
 
     on condition(net_error) begin;
        on condition(net_error) system;
@@ -26,20 +28,14 @@
        stop;
     end; /* on condition(net_timeout) */
 
-    if hbound(sysparm) < 3 then do;
-       put skip list('usage: client <host> <port> <message>');
-       stop;
-    end;
-    msg = sysparm(3);
-
     conn = net_open(AF_INET, SOCK_STREAM, 0);
     if conn = null() then stop;
-    call net_connect(conn, sysparm(1), fixed(sysparm(2)));
+    call net_connect(conn, host, port);
 
     n = net_write(conn, msg);
     put skip list('sent', n, 'bytes');
 
-    n = net_read_all(conn, reply);
+    n = net_read_until(conn, reply, '0A'x);
     put skip list('reply:', substr(reply, 1, n));
 
     call net_close(conn);

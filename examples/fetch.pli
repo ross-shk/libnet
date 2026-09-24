@@ -1,14 +1,10 @@
- /* fetch.pli - fetch http://example.com/ into an expandable buffer.
+ /* fetch.pli - fetch http://example.com/ into a response buffer.
     Module:  fetch
     Purpose: connect to example.com port 80, send a minimal HTTP/1.0
-             GET / request, and read the whole reply via net_read_all
-             which auto-doubles its CONTROLLED char(*) buffer until 
-                 EOF.
+             GET / request, and read the reply via net_read_all.
              Every other failure arrives as a condition.
-    Usage:   fetch                        (no arguments; host is 
-        fixed)
-    Build:   make                                   (build libnet.a 
-        once)
+    Usage:   fetch (no arguments; host is fixed)
+    Build:   make
              make build-prog SRC=examples/fetch.pli OUT=fetch
              ./fetch
     Compiles against the compiled net module (link -lnet + libpli.a):
@@ -23,7 +19,7 @@
    dcl len   fixed bin(31);         /* total bytes read */
    dcl sent  fixed bin(31);
    dcl req   char(56);
-   dcl body  char(*) controlled;    /* auto-expanding buffer */
+   dcl body  char(NET_BUF_CAP) varying;
 
    /* ON units: each re-arms so a failure inside does not recurse. */
    on condition(net_error) begin;
@@ -42,8 +38,6 @@
      stop;
    end;  /* on condition(net_overflow) */
 
-   allocate body;  /* initial extent set by compiler */
-
    conn = net_open(AF_INET, SOCK_STREAM, 0);
    if conn = null() then stop;
    call net_set_timeout(conn, 10000, 10000);
@@ -57,16 +51,13 @@
    sent = net_send_all(conn, req);
    put skip list('sent', sent, 'request bytes');
 
-   /* Single call: net_read_all reads until EOF, auto-doubling the
-    * CONTROLLED char(*) buffer whenever a chunk would not fit.
-    * Overflow signals net_overflow (buffer hit MAXLENGTH). */
+   /* Read until EOF or signal overflow when the buffer is full. */
    len = net_read_all(conn, body);
 
    put skip list('fetched', len, 'bytes from example.com');
    if len > 0 then
       put skip list(substr(body, 1, min(len, 500)));
 
-   free body;
    call net_close(conn);
    put skip list('done');
  end fetch;

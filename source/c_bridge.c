@@ -77,22 +77,21 @@ int netc_connect(int fd, const char *host, int hostlen, int port) {
     hbuf[i] = (host[i] == ' ' || host[i] == '\t') ? '\0' : host[i];
   hbuf[n] = '\0';
 
+  struct addrinfo hints, *res = NULL;
+  memset(&hints, 0, sizeof(hints));
+  hints.ai_family = AF_INET;
+  hints.ai_socktype = SOCK_STREAM;
+
+  if (getaddrinfo(hbuf, NULL, &hints, &res) != 0) {
+    save_errno();
+    return -1;
+  }
+
   struct sockaddr_in a;
-  memset(&a, 0, sizeof a);
-  a.sin_family = AF_INET;
+  memcpy(&a, res->ai_addr, res->ai_addrlen);
   a.sin_port = htons((unsigned short)port);
 
-  struct in_addr addr;
-  if (inet_pton(AF_INET, hbuf, &addr) == 1) {
-    a.sin_addr = addr;
-  } else {
-    struct hostent *he = gethostbyname(hbuf);
-    if (!he || !he->h_addr_list[0]) {
-      save_errno();
-      return -1;
-    }
-    memcpy(&a.sin_addr, he->h_addr_list[0], he->h_length);
-  }
+  freeaddrinfo(res);
 
   if (connect(fd, (struct sockaddr *)&a, sizeof a) != 0) {
     save_errno();
@@ -226,23 +225,25 @@ int netc_resolve(const char *host, int hostlen, char *ip, int iplen) {
     hbuf[i] = (host[i] == ' ' || host[i] == '\t') ? '\0' : host[i];
   hbuf[n] = '\0';
 
-  struct in_addr addr;
-  if (inet_pton(AF_INET, hbuf, &addr) == 1) {
-    /* already numeric */
-  } else {
-    struct hostent *he = gethostbyname(hbuf);
-    if (!he || !he->h_addr_list[0]) {
-      save_errno();
-      return -1;
-    }
-    memcpy(&addr, he->h_addr_list[0], he->h_length);
+  struct addrinfo hints, *res = NULL;
+  memset(&hints, 0, sizeof(hints));
+  hints.ai_family = AF_INET;
+  hints.ai_socktype = SOCK_STREAM;
+
+  if (getaddrinfo(hbuf, NULL, &hints, &res) != 0) {
+    save_errno();
+    return -1;
   }
+
+  struct sockaddr_in *sa = (struct sockaddr_in *)res->ai_addr;
   char tmp[16];
-  inet_ntop(AF_INET, &addr, tmp, sizeof tmp);
+  inet_ntop(AF_INET, &sa->sin_addr, tmp, sizeof tmp);
   for (i = 0; i < iplen && tmp[i]; ++i)
     ip[i] = tmp[i];
   for (; i < iplen; ++i)
     ip[i] = ' ';
+
+  freeaddrinfo(res);
   return 0;
 }
 
@@ -311,22 +312,20 @@ int netc_connect_nb(int fd, const char *host, int hostlen, int port) {
     hbuf[i] = (host[i] == ' ' || host[i] == '\t') ? '\0' : host[i];
   hbuf[n] = '\0';
 
-  struct sockaddr_in a;
-  memset(&a, 0, sizeof a);
-  a.sin_family = AF_INET;
-  a.sin_port = htons((unsigned short)port);
+  struct addrinfo hints, *res = NULL;
+  memset(&hints, 0, sizeof(hints));
+  hints.ai_family = AF_INET;
+  hints.ai_socktype = SOCK_STREAM;
 
-  struct in_addr addr;
-  if (inet_pton(AF_INET, hbuf, &addr) == 1) {
-    a.sin_addr = addr;
-  } else {
-    struct hostent *he = gethostbyname(hbuf);
-    if (!he || !he->h_addr_list[0]) {
-      save_errno();
-      return -2;
-    }
-    memcpy(&a.sin_addr, he->h_addr_list[0], he->h_length);
+  if (getaddrinfo(hbuf, NULL, &hints, &res) != 0) {
+    save_errno();
+    return -2;
   }
+
+  struct sockaddr_in a;
+  memcpy(&a, res->ai_addr, res->ai_addrlen);
+  freeaddrinfo(res);
+  a.sin_port = htons((unsigned short)port);
 
   int r = connect(fd, (struct sockaddr *)&a, sizeof a);
   if (r != 0 && errno == EINPROGRESS) {
@@ -356,7 +355,7 @@ int netc_getsockerr(int fd, int *err) {
 
 /* UDP send to ip:port. Returns bytes sent or -1. */
 int netc_sendto(int fd, const char *buf, int len, int flags, const char *ip,
-             int iplen, int port) {
+              int iplen, int port) {
   char hbuf[256];
   int n = iplen < (int)sizeof(hbuf) - 1 ? iplen : (int)sizeof(hbuf) - 1;
   int i;
@@ -364,18 +363,21 @@ int netc_sendto(int fd, const char *buf, int len, int flags, const char *ip,
     hbuf[i] = (ip[i] == ' ' || ip[i] == '\t') ? '\0' : ip[i];
   hbuf[n] = '\0';
 
-  struct sockaddr_in a;
-  memset(&a, 0, sizeof a);
-  a.sin_family = AF_INET;
-  a.sin_port = htons((unsigned short)port);
-  if (inet_pton(AF_INET, hbuf, &a.sin_addr) != 1) {
-    struct hostent *he = gethostbyname(hbuf);
-    if (!he || !he->h_addr_list[0]) {
-      save_errno();
-      return -1;
-    }
-    memcpy(&a.sin_addr, he->h_addr_list[0], he->h_length);
+  struct addrinfo hints, *res = NULL;
+  memset(&hints, 0, sizeof(hints));
+  hints.ai_family = AF_INET;
+  hints.ai_socktype = SOCK_DGRAM;
+
+  if (getaddrinfo(hbuf, NULL, &hints, &res) != 0) {
+    save_errno();
+    return -1;
   }
+
+  struct sockaddr_in a;
+  memcpy(&a, res->ai_addr, res->ai_addrlen);
+  freeaddrinfo(res);
+  a.sin_port = htons((unsigned short)port);
+
   int r = (int)sendto(fd, buf, (unsigned)len, flags,
                       (struct sockaddr *)&a, sizeof a);
   if (r < 0)

@@ -1,15 +1,15 @@
  /* resolve.pli - DNS resolution example for libnet.
     Module:  resolve
-    Purpose: show how net_resolve maps a host name to a dotted-quad 
-        string.
-    Usage:   resolve <host>
+    Purpose: show how net_resolve maps a host name to an IPv4 address.
     Compiles against the compiled net module (link -lnet + libpli.a). */
 
  resolve: procedure options(main);
    %include net;
 
-   dcl ip   char(64);
-   dcl host char(256);
+   dcl ip   char(16) varying;
+   dcl host char(NET_HOST_MAX) varying;
+
+   host = 'localhost';
 
    on condition(net_error) begin;
       on condition(net_error) system;
@@ -17,9 +17,6 @@
       stop;
    end; /* on condition(net_error) */
 
-   if hbound(sysparm) < 1 then host = 'localhost';
-   else host = sysparm(1);
-
-   call net_resolve(host, ip);       /* raises net_error on failure */
-   put skip list(trim(host), '->', trim(ip));
+   call net_resolve(host, ip);
+   put skip list(host, '->', ip);
  end resolve;

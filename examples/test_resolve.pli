@@ -1,0 +1,7 @@
+ /* Test netc_resolve directly */
+  test_resolve: procedure options(main);
+    %include net;
+    declare ip char(16) varying;
+    call net_resolve('127.0.0.1', ip);
+    put skip list('ip=', trim(ip));
+  end test_resolve;

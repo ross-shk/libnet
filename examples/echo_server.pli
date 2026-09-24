@@ -1,11 +1,7 @@
  /* echo_server.pli - echo server + client demo for libnet
   * (PL/I-centric).
     Module:  echo_server
-    Purpose: demonstrate the handle-based API and ON-condition error 
-        model.
-             The server listens on 127.0.0.1:8090, accepts one client,
-                 and
-             echoes back each line it reads. EOF ends the loop.
+    Purpose: listen on port 8090, accept one client, and echo lines.
     Usage:   echo_server            (blocks until a client connects)
     Compiles against the compiled net module (link -lnet + libpli.a). */
 
@@ -14,15 +10,11 @@
 
    dcl server pointer;
    dcl client pointer;
-   dcl line    char(1024);
+   dcl line    char(NET_BUF_CAP) varying;
    dcl got     fixed bin(31);
    dcl done    bit(1);
 
-   /* ON units are kept to a single action, and each re-arms the
-    * condition
-    * so a failure inside the unit does not recurse (style guide). 
-        Errors
-    * and timeouts abort; EOF is the normal end of the echo loop. */
+   /* Re-arm conditions so an ON-unit failure does not recurse. */
    on condition(net_error) begin;
      on condition(net_error) system;
      put skip list('net error, code=', oncode());
@@ -49,7 +41,7 @@
    do while (^done);
       got = net_read_until(client, line,
          '0A'x);   /* newline delimiter */
-      call net_write(client, substr(line, 1, got));
+      if ^done then call net_write(client, line);
    end; /* do while */
 
    call net_close(client);
