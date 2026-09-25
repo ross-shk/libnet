@@ -1,0 +1,138 @@
+/* fetch_dyn.pli - fetch http://example.com/ into a dynamically-sized
+   string.
+ 
+   Module:    fetch_dyn
+   Purpose:   Demonstrates TR25.084 dynamic string allocation (rules 
+   13, 89):
+              - CHAR(*) VARYING CONTROLLED declaration with asterisk 
+              bound
+              - ALLOCATE var (n) CHARACTER VARYING with runtime 
+              dimension
+              - Reads HTTP response of unknown length into CONTROLLED 
+              string
+   Build:     make build-prog SRC=examples/fetch_dyn.pli OUT=fetch_dyn
+ */
+
+ fetch_dyn: procedure options(main);
+ %include net;
+
+   dcl conn           pointer;
+   dcl requested_len  fixed bin(31);
+   dcl sent           fixed bin(31);
+   dcl req            char(56);
+    dcl body           char(*) varying controlled;   /* TR25 rule 13:
+    asterisk bound */
+    dcl spare          char(*) varying controlled;   /* trim copy */
+   dcl total_len      fixed bin(31) init(0);
+
+   /* ON units: each re-arms so failure inside does not recurse. */
+   on condition(net_error) begin;
+     on condition(net_error) system;
+     put skip list('error:', net_errtext());
+     stop;
+   end;
+   on condition(net_timeout) begin;
+     on condition(net_timeout) system;
+     put skip list('timeout:', net_errtext());
+     stop;
+   end;
+    on condition(net_overflow) begin;
+      on condition(net_overflow) system;
+      put skip list('overflow');
+      stop;
+    end;
+    on condition(net_eof) begin;
+      on condition(net_eof) system;
+      /* fall through: net_read resumes and returns 0, the loop leaves */
+    end;
+
+   conn = net_open(AF_INET, SOCK_STREAM, 0);
+   if conn = null() then stop;
+   call net_set_timeout(conn, 10000, 10000);
+   call net_connect(conn, 'example.com', 80);
+
+   /* HTTP/1.0 GET request with Connection: close */
+   req = 'GET / HTTP/1.0' || '0D0A'x || 'Host: example.com' || '0D0A'x
+      || 'Connection: close' || '0D0A'x || '0D0A'x;
+   sent = net_send_all(conn, req);
+   put skip list('sent', sent, 'request bytes');
+
+   /* Estimate initial allocation: small to force re-allocation */
+   requested_len = 64;
+
+   total_len = read_all(conn, body, requested_len);
+
+    put skip list('fetched', total_len, 'bytes from example.com');
+    if total_len > 0 then
+      put skip list(substr(body, 1, total_len));
+
+   call net_close(conn);
+   free body;
+   put skip list('done');
+
+ /* read_all - read everything from conn into the CONTROLLED string
+    buff , growing it by doubling as needed.
+      conn : open connection
+      buff : CONTROLLED CHAR(*) VARYING, allocated here (must not be
+             allocated on entry); caller frees it
+      cap  : in  - initial allocation size
+             out - final allocation size
+    Returns the number of bytes read. */
+ read_all: procedure(conn, buff , cap) returns(fixed bin(31));
+   dcl conn           pointer;
+   dcl buff           char(*) varying controlled;
+   dcl cap            fixed bin(31);
+
+   dcl spare          char(*) varying controlled;   /* grow copy */
+   dcl chunk          char(NET_BUF_CAP) varying;
+   dcl chunk_len      fixed bin(31);
+   dcl total_len      fixed bin(31) init(0);
+
+   /* TR25 rule 89: ALLOCATE controlled-item with dimension-attribute
+    *   controlled-allocate-item ::= [ integer ] identifier dimension-attribute
+    *                                    [ string-attribute ... ]
+    * Here: ALLOCATE buff (cap) CHARACTER VARYING;
+    */
+   allocate buff (cap) character varying;
+
+   /* Read in chunks, growing CONTROLLED string as needed */
+   do while ('1'b);
+     chunk_len = net_read(conn, chunk, NET_BUF_CAP);
+     if chunk_len = 0 then leave;  /* EOF */
+
+       /* Grow: ALLOCATE pushes a fresh generation, so copy buff 
+          aside first (FREE would discard the bytes read so far).
+          Loop: one chunk can exceed the buff fer several times over */
+       do while (total_len + chunk_len > cap);
+         cap = cap * 2;
+         put skip list('growing buff fer to', cap, 'bytes');
+         allocate spare (cap) character varying;
+         spare = buff;
+         free buff;
+         allocate buff (cap) character varying;
+         buff = spare;
+         free spare;
+      end;
+
+     /* Append chunk to buff using SUBSTR assignment */
+     substr(buff, total_len + 1, chunk_len) = 
+       substr(chunk, 1, chunk_len);
+     total_len = total_len + chunk_len;
+   end;
+
+   /* Trim to actual length, preserving the bytes via the spare */
+   if total_len < requested_len then do;
+     if total_len > 0 then do;
+       allocate spare (total_len) character varying;
+       spare = buff;
+       free buff;
+       allocate buff (total_len) character varying;
+       buff = spare;
+       free spare;
+     end;
+   end;
+
+   return(total_len);
+ end read_all;
+
+ end fetch_dyn;
