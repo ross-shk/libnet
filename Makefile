@@ -65,7 +65,7 @@ build-prog: libnet.a
 # Diagnostic: attempt to compile each example against the interface include
 # and show the wishlist gap. The examples block where the program path needs
 # pli-llvm features (see WISHLIST.md); the module build is a separate step.
-EXAMPLES = examples/echo_server.pli examples/client.pli examples/resolve.pli examples/fetch.pli
+EXAMPLES = examples/echo_server.pli examples/client.pli examples/resolve.pli examples/fetch.pli examples/http_client.pli
 example:
 	@for e in $(EXAMPLES); do \
 	  echo "== compiling $$e (expect wishlist gaps) =="; \

@@ -14,11 +14,12 @@
  fetch: procedure options(main);
    %include net;
 
-   dcl conn  pointer;
+ dcl conn  pointer;
    dcl len   fixed bin(31);         /* total bytes read */
    dcl sent  fixed bin(31);
    dcl req   char(56);
    dcl body  char(NET_BUF_CAP) varying;
+   dcl init_cap fixed bin(31) init(64);
 
    /* ON units: each re-arms so failure inside does not recurse. */
    on condition(net_error) begin;
@@ -51,7 +52,7 @@
    put skip list('sent', sent, 'request bytes');
 
    /* Read until EOF or signal overflow when buffer full. */
-   len = net_read_all(conn, body);
+   len = net_read_all(conn, body, init_cap);
 
    put skip list('fetched', len, 'bytes from example.com');
    if len > 0 then

@@ -278,45 +278,97 @@
    return (got);
  end net_read;
 
- /* Read repeatedly until peer closes/error, appending all received */
- /* bytes into buffer using an internal growing accumulator.        */
- /* Returns: total bytes read. Raises net_overflow on capacity limit. */
- net_read_all: procedure (h, buffer) returns (fixed bin(31));
-   dcl h       pointer;
-   dcl hp      pointer;
-   dcl 1 c     based(hp) like conn_rec;
-   dcl buffer  char(NET_BUF_CAP) varying;
-   dcl buf     char(NET_BUF_CAP) varying;  /* growing accumulator */
-   dcl tmp     char(NET_BUF_CAP);   /* recv scratch                 */
-   dcl got     fixed bin(31);
-   dcl done    bit(1);
+/* Read everything from conn into buffer, growing an internal
+        CONTROLLED buffer as needed, then copy to caller's buffer.
+        conn : open connection
+        buffer : caller's buffer (max NET_BUF_CAP bytes)
+        cap  : in/out - initial/final allocation size for internal buffer
+        Returns the number of bytes read.
+        Raises net_overflow if data exceeds NET_BUF_CAP. */
+     net_read_all: procedure (conn, buffer, cap) returns (fixed bin(31));
+       dcl conn    pointer;
+       dcl hp      pointer;
+       dcl 1 c     based(hp) like conn_rec;
+       dcl buffer  char(NET_BUF_CAP) varying;
+       dcl cap     fixed bin(31);
 
-   hp = h;
-   done  = '0'b;
-   buf   = '';
-   do while (^done);
-     got = netc_recv(c.fd, tmp, NET_BUF_CAP, 0);
-     if got = 0 then do;             /* EOF — normal end */
-       /* Copy accumulated result to caller's buffer */
-       buffer = substr(buf, 1, length(buf));
-       return (length(buf));
-     end;
-     if got < 0 then do;
-       if netc_errno() = EAGAIN then call raise_timeout();
-       else call raise_err();
-       buffer = substr(buf, 1, length(buf));
-       return (length(buf));
-     end;
-     /* Append chunk — VARYING concat manages length automatically */
-     buf = buf || substr(tmp, 1, got);
-     if length(buf) > NET_BUF_CAP then do;
-       call raise_overflow();
-       return (length(buf));
-     end;
-   end; /* do while */
-   buffer = substr(buf, 1, length(buf));
-   return (length(buf));
- end net_read_all;
+       dcl internal_buff char(*) varying controlled;
+       dcl spare   char(*) varying controlled;
+       dcl chunk   char(NET_BUF_CAP) varying;
+       dcl chunk_len fixed bin(31);
+       dcl total_len fixed bin(31) init(0);
+       dcl orig_cap  fixed bin(31);
+
+       hp = conn;
+       if c.fd <= 0 then do;
+          signal condition(net_error) set oncode(EBADF);
+          return (0);
+       end;
+
+       orig_cap = cap;
+
+       /* TR25 rule 89: ALLOCATE controlled-item with dimension-attribute
+        *   controlled-allocate-item ::= [ integer ] identifier dimension-attribute
+        *                                    [ string-attribute ... ]
+        * Here: ALLOCATE internal_buff (cap) CHARACTER VARYING;
+        */
+       allocate internal_buff (cap) character varying;
+
+       /* Read in chunks, growing CONTROLLED string as needed */
+       do while ('1'b);
+         chunk_len = netc_recv(c.fd, chunk, NET_BUF_CAP, 0);
+         if chunk_len = 0 then leave;  /* EOF */
+
+         if chunk_len < 0 then do;
+           if netc_errno() = EAGAIN then call raise_timeout();
+           else call raise_err();
+           free internal_buff;
+           return (total_len);
+         end;
+
+         /* Grow: ALLOCATE pushes a fresh generation, so copy internal_buff
+            aside first (FREE would discard the bytes read so far).
+            Loop: one chunk can exceed the buffer several times over */
+         do while (total_len + chunk_len > cap);
+           cap = cap * 2;
+           put skip list('growing buffer to', cap, 'bytes');
+           allocate spare (cap) character varying;
+           spare = internal_buff;
+           free internal_buff;
+           allocate internal_buff (cap) character varying;
+           internal_buff = spare;
+           free spare;
+         end;
+
+         /* Append chunk to internal_buff using SUBSTR assignment */
+         substr(internal_buff, total_len + 1, chunk_len) =
+           substr(chunk, 1, chunk_len);
+         total_len = total_len + chunk_len;
+       end;
+
+       /* Trim internal buffer to actual length if we overallocated */
+       if total_len < orig_cap then do;
+         if total_len > 0 then do;
+           allocate spare (total_len) character varying;
+           spare = internal_buff;
+           free internal_buff;
+           allocate internal_buff (total_len) character varying;
+           internal_buff = spare;
+           free spare;
+         end;
+       end;
+
+       /* Copy to caller's buffer, check for overflow */
+       if total_len > NET_BUF_CAP then do;
+         free internal_buff;
+         call raise_overflow();
+         return (NET_BUF_CAP);
+       end;
+
+       buffer = internal_buff;
+       free internal_buff;
+       return (total_len);
+     end net_read_all;
 
  /* Read until a delimiter character is seen, appending               */
  /* received bytes to buffer.                                         */

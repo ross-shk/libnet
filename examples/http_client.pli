@@ -1,0 +1,65 @@
+ /* http_client.pli - HTTP client using net_read_all (auto-growing buffer).
+
+    Module:    http_client
+    Purpose:   Connect to example.com:80, send HTTP/1.0 GET /,
+               read entire response into a VARYING buffer via net_read_all.
+    Usage:     make build-prog SRC=examples/http_client.pli OUT=http_client
+               ./http_client
+    Compiles against the compiled net module (link -lnet + libpli.a). */
+
+ http_client: procedure options(main);
+  %include net;
+
+    dcl conn       pointer;
+    dcl len        fixed bin(31);      /* total bytes read */
+    dcl sent       fixed bin(31);
+    dcl req        char(56);
+    dcl resp       char(NET_BUF_CAP) varying;
+    dcl init_cap   fixed bin(31) init(64);
+
+    on condition(net_error) begin;
+      on condition(net_error) system;
+      put skip list('error:', net_errtext());
+      stop;
+    end; /* on condition(net_error) */
+    on condition(net_timeout) begin;
+      on condition(net_timeout) system;
+      put skip list('timeout:', net_errtext());
+      stop;
+    end; /* on condition(net_timeout) */
+    on condition(net_overflow) begin;
+      on condition(net_overflow) system;
+      put skip list('response too large');
+      stop;
+    end; /* on condition(net_overflow) */
+    on condition(net_eof) begin;
+      on condition(net_eof) system;
+    end; /* on condition(net_eof) */
+
+    conn = net_open(AF_INET, SOCK_STREAM, 0);
+    if conn = null() then stop;
+    call net_set_timeout(conn, 10000, 10000);
+    call net_connect(conn, 'example.com', 80);
+
+    req = 'GET / HTTP/1.0' || '0D0A'x || 'Host: example.com' || '0D0A'x
+       || 'Connection: close' || '0D0A'x || '0D0A'x;
+    sent = net_send_all(conn, req);
+    put skip list('sent', sent, 'request bytes');
+
+    /* Single call: net_read_all reads until EOF or overflow.
+       Buffer grows automatically via implicit realloc — no manual
+       ALLOCATE/FREE needed inside net_read_all.                */
+    len = net_read_all(conn, resp, init_cap);
+
+    put skip list('received', len, 'bytes from example.com');
+    if len > 0 then do;
+       put skip list('--- response start ---');
+       put skip list(substr(resp, 1, min(len, 400)));
+       if len > 400 then
+         put skip list('...' , (len - 400) , ' more bytes');
+       put skip list('--- response end ---');
+    end;
+
+    call net_close(conn);
+    put skip list('done');
+  end http_client;

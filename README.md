@@ -67,7 +67,8 @@ internal procedures, and descriptive constants.
 | `examples/echo_server.pli` | echo server + client demo |
 | `examples/client.pli` | minimal TCP client |
 | `examples/resolve.pli` | DNS resolution demo |
-| `examples/fetch.pli` | fetch example.com into an expandable buffer |
+| `examples/fetch.pli` | fetch example.com using manual buffer grow-loop |
+| `examples/http_client.pli` | fetch example.com via `net_read_all` (auto-growing buffer) |
 
 ## Build
 
@@ -111,6 +112,44 @@ on condition(net_eof) begin; ... end;
 on condition(net_overflow) begin; ... end;
 ```
 
+## Bounded auto-accumulation
+
+`net_read_all` reads all data from a socket until EOF or error, accumulating into the caller's `VARYING` buffer via concatenation. Growth is automatic up to the buffer's `MAXLENGTH`; when `MAXLENGTH` is exhausted a `net_overflow` condition is raised with whatever was accumulated so far:
+
+```pli
+dcl resp  char(NET_BUF_CAP) varying;     /* bounded accumulator */
+
+len = net_read_all(conn, resp);          /* auto-reads until EOF */
+put skip list('got', len, 'bytes');
+
+/* Overflow signals capacity exhausted before EOF.               */
+on condition(net_overflow) begin;
+  on condition(net_overflow) system;
+  put skip list('response too large');
+end;
+```
+
+This replaces the manual grow-loop from `examples/fetch.pli`:
+
+```pli
+/* Before (manual): allocate → free → realloc cycle inside loop */
+do while (^done);
+  got = net_read(conn, chunk, buflen);
+  ...
+  do while (total + got > cap);
+    cap = cap * 2;
+    allocate spare; spare = body; free body;
+    allocate body; body = spare; free spare;
+  end;
+  substr(body, total+1, got) = substr(chunk, 1, got);
+end;
+
+/* After (automatic): single call, bounded by buffer MAXLENGTH   */
+len = net_read_all(conn, resp);        /* auto-reads, bounded */
+```
+
+For responses that may exceed `NET_BUF_CAP`, see `examples/fetch_dyn.pli` which demonstrates explicit `CONTROLLED` allocation with manual grow-loops outside the library function.
+
 ## Production readiness
 
 The C bridge and PL/I layer cover the core of what a production socket client
@@ -126,8 +165,7 @@ or single-client server needs:
 - **errors** — conditions-only model (`net_error` / `net_timeout` / `net_eof` /
   `net_overflow`), `net_strerror` (full errno text) and `net_errtext`; named
   errno constants (`errno.inc`);
-- **buffer safety** — `net_read_all` / `net_read_until` bound appends to the
-  caller buffer (`maxlength`), so a long stream cannot overrun.
+- **buffer safety** — `net_read_all` accumulates into caller buffer up to its `MAXLENGTH`, raising `net_overflow` when exhausted mid-stream. `net_read_until` / `net_read` bound appends to the caller buffer (`maxlength`), so a long delimiter search cannot overrun.
 
 Still to add for a fully production-grade library (out of current scope):
 
