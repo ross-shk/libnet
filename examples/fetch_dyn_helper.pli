@@ -20,9 +20,9 @@
    dcl requested_len  fixed bin(31);
    dcl sent           fixed bin(31);
    dcl req            char(56);
-    dcl body           char(*) varying controlled;   /* TR25 rule 13:
+   dcl body           char(*) varying controlled;   /* TR25 rule 13:
     asterisk bound */
-    dcl spare          char(*) varying controlled;   /* trim copy */
+   dcl spare          char(*) varying controlled;   /* trim copy */
    dcl total_len      fixed bin(31) init(0);
 
    /* ON units: each re-arms so failure inside does not recurse. */
