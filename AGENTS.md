@@ -6,6 +6,6 @@
 
 - Make and refine a detailed plan for a task first, then implement
 
-- PL/I card margins 2–72: nonblank `.pli`/`.inc` lines carry one leading space (text begins in column 2) and nothing past column 72
+- PL/I card margins 2–72: nonblank `.pli`/`.inc` lines carry one leading space (text begins in column 2) and nothing past column 72, keep indentation consistent accross .pli and .inc files
 
 - Add one-line comments stating the *intent* of the block that follows
