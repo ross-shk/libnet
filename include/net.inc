@@ -85,7 +85,7 @@
     fixed bin(31)) external;
 
  dcl net_resolve    entry (char(NET_HOST_MAX) varying,
-    char(16) varying) external;
+   char(16) varying) external;
  dcl net_strerror   entry (fixed bin(31),
     char(NET_BUF_CAP) varying) external;
 

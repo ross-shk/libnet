@@ -1,7 +1,8 @@
- /* resolve.pli - DNS resolution example for libnet.
-    Module:  resolve
-    Purpose: show how net_resolve maps a host name to an IPv4 address.
-    Compiles against the compiled net module (link -lnet + libpli.a). */
+ /* resolve.pli - DNS resolution example for libnet.   
+      
+    Module:    resolve   
+    Purpose:   Show net_resolve maps host name to IPv4 address.   
+    Compiles against the net module (link -lnet + libpli.a). */
 
  resolve: procedure options(main);
    %include net;

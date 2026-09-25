@@ -1,43 +1,44 @@
- /* client.pli - minimal TCP client for libnet.
-    Module:  client
-    Purpose: connect to localhost:8090, exchange one line, and close.
+ /* client.pli - minimal TCP client for libnet. 
+
+    Module:    client 
+    Purpose:   Connect to localhost:8090, exchange one line, close. 
     Compiles against the compiled net module. */
 
  client: procedure options(main);
-    %include net;
+ %include net;
 
-    dcl conn pointer;
-    dcl reply char(NET_BUF_CAP) varying;
-    dcl msg   char(NET_BUF_CAP) varying;
-    dcl n     fixed bin(31);
-    dcl host  char(NET_HOST_MAX) varying;
-    dcl port  fixed bin(31);
+   dcl conn pointer;
+   dcl reply char(NET_BUF_CAP) varying;
+   dcl msg   char(NET_BUF_CAP) varying;
+   dcl n     fixed bin(31);
+   dcl host  char(NET_HOST_MAX) varying;
+   dcl port  fixed bin(31);
 
-    host = 'localhost';
-    port = 8090;
-    msg = 'Hello from PL/I!' || '0A'x;
+   host = 'localhost';
+   port = 8090;
+   msg = 'Hello from PL/I!' || '0A'x;
 
-    on condition(net_error) begin;
-       on condition(net_error) system;
-       put skip list('error:', net_errtext());
-       stop;
-    end; /* on condition(net_error) */
-    on condition(net_timeout) begin;
-       on condition(net_timeout) system;
-       put skip list('timeout');
-       stop;
-    end; /* on condition(net_timeout) */
+   on condition(net_error) begin;
+      on condition(net_error) system;
+      put skip list('error:', net_errtext());
+      stop;
+   end; /* on condition(net_error) */
+   on condition(net_timeout) begin;
+      on condition(net_timeout) system;
+      put skip list('timeout');
+      stop;
+   end; /* on condition(net_timeout) */
 
-    conn = net_open(AF_INET, SOCK_STREAM, 0);
-    if conn = null() then stop;
-    call net_connect(conn, host, port);
+   conn = net_open(AF_INET, SOCK_STREAM, 0);
+   if conn = null() then stop;
+   call net_connect(conn, host, port);
 
-    n = net_write(conn, msg);
-    put skip list('sent', n, 'bytes');
+   n = net_write(conn, msg);
+   put skip list('sent', n, 'bytes');
 
-    n = net_read_until(conn, reply, '0A'x);
-    put skip list('reply:', substr(reply, 1, n));
+   n = net_read_until(conn, reply, '0A'x);
+   put skip list('reply:', substr(reply, 1, n));
 
-    call net_close(conn);
-    put skip list('done');
+   call net_close(conn);
+   put skip list('done');
  end client;

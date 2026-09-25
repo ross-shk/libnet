@@ -1,8 +1,8 @@
- /* echo_server.pli - echo server + client demo for libnet
-  * (PL/I-centric).
-    Module:  echo_server
-    Purpose: listen on port 8090, accept one client, and echo lines.
-    Usage:   echo_server            (blocks until a client connects)
+ /* echo_server.pli - echo server demo for libnet (PL/I-centric). 
+    
+    Module:    echo_server 
+    Purpose:   Listen on port 8090, accept one client, echo lines. 
+    Usage:     echo_server (blocks until a client connects) 
     Compiles against the compiled net module (link -lnet + libpli.a). */
 
  echo_server: procedure options(main);
@@ -14,7 +14,7 @@
    dcl got     fixed bin(31);
    dcl done    bit(1);
 
-   /* Re-arm conditions so an ON-unit failure does not recurse. */
+   /* Re-arm conditions so ON-unit failure does not recurse. */
    on condition(net_error) begin;
      on condition(net_error) system;
      put skip list('net error, code=', oncode());
@@ -27,7 +27,7 @@
    end; /* on condition(net_timeout) */
    on condition(net_eof) done = '1'b;
 
-   /* listen on 127.0.0.1:8090 */
+   /* Listen on 127.0.0.1:8090 */
    server = net_listen(8090, 5);
    if server = null() then stop;
    put skip list('listening on 8090');
@@ -36,7 +36,7 @@
    call net_accept(server, client);
    put skip list('client accepted');
 
-   /* echo loop: read a line (net_eof ends it), write it back */
+   /* Echo loop: read a line (net_eof ends it), write it back */
    done = '0'b;
    do while (^done);
       got = net_read_until(client, line,
