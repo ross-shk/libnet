@@ -443,13 +443,7 @@
    do while (total < want);
      take  = min(NET_BUF_CAP, want - total);
      chunk = substr(buffer, total + 1, take);
-     n = netc_send(c.fd, chunk, take, 0);
-     if n < 0 then do;
-       if netc_errno() = EAGAIN then iterate;
-       call raise_err();
-       return (total);
-     end;
-     if n = 0 then iterate;
+     n = net_send(h, chunk, 0);
      total = total + n;
    end; /* do while */
 
