@@ -297,7 +297,7 @@
    dcl buffer  char(*) varying controlled;
    dcl cap     fixed bin(31) init(1024);
    dcl spare   char(*) varying controlled;
-   dcl chunk   char(NET_BUF_CAP);
+   dcl chunk   char(NET_BUF_CAP) varying;
    dcl chunk_len fixed bin(31);
    dcl total_len fixed bin(31) init(0);
 
@@ -306,17 +306,10 @@
    /* Allocate initial controlled buffer */
    allocate buffer (cap) character varying;
 
-   /* Read in chunks, growing CONTROLLED string as needed */
+   /* Read in chunks using net_read, growing CONTROLLED string as needed */
    do while ('1'b);
-     chunk_len = netc_recv(c.fd, chunk, NET_BUF_CAP, 0);
+     chunk_len = net_read(conn, chunk, NET_BUF_CAP);
      if chunk_len = 0 then leave;  /* EOF */
-
-     if chunk_len < 0 then do;
-       if netc_errno() = EAGAIN then call raise_timeout();
-       else call raise_err();
-       free buffer;
-       return (total_len);
-     end;
 
      /* Grow: ALLOCATE pushes a fresh generation, so copy buffer
         aside first (FREE would discard the bytes read so far).
