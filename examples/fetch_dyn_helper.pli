@@ -36,15 +36,15 @@
      put skip list('timeout:', net_errtext());
      stop;
    end;
-    on condition(net_overflow) begin;
-      on condition(net_overflow) system;
-      put skip list('overflow');
-      stop;
-    end;
-    on condition(net_eof) begin;
-      on condition(net_eof) system;
-      /* fall through: net_read resumes and returns 0, the loop leaves */
-    end;
+   on condition(net_overflow) begin;
+     on condition(net_overflow) system;
+     put skip list('overflow');
+     stop;
+   end;
+   on condition(net_eof) begin;
+     on condition(net_eof) system;
+     /* fall through: net_read resumes and returns 0, the loop leaves */
+   end;
 
    conn = net_open(AF_INET, SOCK_STREAM, 0);
    if conn = null() then stop;
@@ -62,9 +62,9 @@
 
    total_len = read_all(conn, body, requested_len);
 
-    put skip list('fetched', total_len, 'bytes from example.com');
-    if total_len > 0 then
-      put skip list(substr(body, 1, total_len));
+   put skip list('fetched', total_len, 'bytes from example.com');
+   if total_len > 0 then
+     put skip list(substr(body, 1, total_len));
 
    call net_close(conn);
    free body;
@@ -99,7 +99,6 @@
    do while ('1'b);
      chunk_len = net_read(conn, chunk, NET_BUF_CAP);
      if chunk_len = 0 then leave;  /* EOF */
-
        /* Grow: ALLOCATE pushes a fresh generation, so copy buff 
           aside first (FREE would discard the bytes read so far).
           Loop: one chunk can exceed the buff fer several times over */

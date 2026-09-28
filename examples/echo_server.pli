@@ -6,7 +6,7 @@
     Compiles against the compiled net module (link -lnet + libpli.a). */
 
  echo_server: procedure options(main);
-   %include net;
+ %include net;
 
    dcl server pointer;
    dcl client pointer;
@@ -39,9 +39,8 @@
    /* Echo loop: read a line (net_eof ends it), write it back */
    done = '0'b;
    do while (^done);
-      got = net_read_until(client, line,
-         '0A'x);   /* newline delimiter */
-      if ^done then call net_write(client, line);
+     got = net_read_until(client, line, '0A'x);  /* newline delimiter */
+     if ^done then call net_write(client, line);
    end; /* do while */
 
    call net_close(client);

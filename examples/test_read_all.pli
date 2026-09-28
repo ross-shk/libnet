@@ -1,53 +1,53 @@
-/* test_read_all.pli - test net_read_all with dynamic growth */
+ /* test_read_all.pli - test net_read_all with dynamic growth */
 
-test_read_all: procedure options(main);
-%include net;
+ test_read_all: procedure options(main);
+ %include net;
 
-  dcl conn           pointer;
-  dcl requested_len  fixed bin(31);
-  dcl sent           fixed bin(31);
-  dcl req            char(56);
-  dcl body           char(NET_BUF_CAP) varying;
-  dcl total_len      fixed bin(31) init(0);
-  dcl cap            fixed bin(31) init(64);
+   dcl conn           pointer;
+   dcl requested_len  fixed bin(31);
+   dcl sent           fixed bin(31);
+   dcl req            char(56);
+   dcl body           char(NET_BUF_CAP) varying;
+   dcl total_len      fixed bin(31) init(0);
+   dcl cap            fixed bin(31) init(64);
 
-  on condition(net_error) begin;
-    on condition(net_error) system;
-    put skip list('error:', net_errtext());
-    stop;
-  end;
-  on condition(net_timeout) begin;
-    on condition(net_timeout) system;
-    put skip list('timeout:', net_errtext());
-    stop;
-  end;
-  on condition(net_overflow) begin;
-    on condition(net_overflow) system;
-    put skip list('overflow');
-    stop;
-  end;
-  on condition(net_eof) begin;
-    on condition(net_eof) system;
-  end;
+   on condition(net_error) begin;
+     on condition(net_error) system;
+     put skip list('error:', net_errtext());
+     stop;
+   end;
+   on condition(net_timeout) begin;
+     on condition(net_timeout) system;
+     put skip list('timeout:', net_errtext());
+     stop;
+   end;
+   on condition(net_overflow) begin;
+     on condition(net_overflow) system;
+     put skip list('overflow');
+     stop;
+   end;
+   on condition(net_eof) begin;
+     on condition(net_eof) system;
+   end;
 
-  conn = net_open(AF_INET, SOCK_STREAM, 0);
-  if conn = null() then stop;
-  call net_set_timeout(conn, 10000, 10000);
-  call net_connect(conn, 'example.com', 80);
+   conn = net_open(AF_INET, SOCK_STREAM, 0);
+   if conn = null() then stop;
+   call net_set_timeout(conn, 10000, 10000);
+   call net_connect(conn, 'example.com', 80);
 
-  req = 'GET / HTTP/1.0' || '0D0A'x || 'Host: example.com' || '0D0A'x
-     || 'Connection: close' || '0D0A'x || '0D0A'x;
-  sent = net_send_all(conn, req);
-  put skip list('sent', sent, 'request bytes');
+   req = 'GET / HTTP/1.0' || '0D0A'x || 'Host: example.com' || '0D0A'x
+      || 'Connection: close' || '0D0A'x || '0D0A'x;
+   sent = net_send_all(conn, req);
+   put skip list('sent', sent, 'request bytes');
 
-  total_len = net_read_all(conn, body, cap);
+   total_len = net_read_all(conn, body, cap);
 
-  put skip list('fetched', total_len, 'bytes from example.com');
-  put skip list('final cap:', cap);
-  if total_len > 0 then
-    put skip list(substr(body, 1, min(total_len, 200)));
+   put skip list('fetched', total_len, 'bytes from example.com');
+   put skip list('final cap:', cap);
+   if total_len > 0 then
+     put skip list(substr(body, 1, min(total_len, 200)));
 
-  call net_close(conn);
-  put skip list('done');
+   call net_close(conn);
+   put skip list('done');
 
-end test_read_all;
+ end test_read_all;

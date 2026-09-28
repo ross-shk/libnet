@@ -1,4 +1,5 @@
-/* http_client.pli - HTTP client using net_read_all (auto-growing buffer).
+ /* http_client.pli - HTTP client using net_read_all (auto-growing 
+ buffer).
 
     Module:    http_client
     Purpose:   Connect to example.com:80, send HTTP/1.0 GET /,
@@ -8,12 +9,13 @@
     Compiles against the compiled net module (link -lnet + libpli.a). */
 
  http_client: procedure options(main);
-  %include net;
+ %include net;
 
     dcl conn           pointer;
     dcl sent           fixed bin(31);
     dcl req            char(56);
-    dcl resp           char(NET_BUF_CAP) varying;   /* fixed max, varies in length */
+    dcl resp           char(NET_BUF_CAP) varying;   /* fixed max,
+    varies in length */
     dcl total_len      fixed bin(31) init(0);
 
     on condition(net_error) begin;

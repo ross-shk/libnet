@@ -5,7 +5,7 @@
     Compiles against the net module (link -lnet + libpli.a). */
 
  resolve: procedure options(main);
-   %include net;
+ %include net;
 
    dcl ip   char(16) varying;
    dcl host char(NET_HOST_MAX) varying;
@@ -13,9 +13,9 @@
    host = 'localhost';
 
    on condition(net_error) begin;
-      on condition(net_error) system;
-      put skip list('could not resolve:', net_errtext());
-      stop;
+     on condition(net_error) system;
+     put skip list('could not resolve:', net_errtext());
+     stop;
    end; /* on condition(net_error) */
 
    call net_resolve(host, ip);

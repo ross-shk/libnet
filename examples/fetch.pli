@@ -12,7 +12,7 @@
 /*            then links fetch.o with libnet.a and libpli.a. */
 
  fetch: procedure options(main);
-   %include net;
+ %include net;
 
  dcl conn  pointer;
    dcl len   fixed bin(31);         /* total bytes read */
@@ -43,8 +43,8 @@
    call net_set_timeout(conn, 10000, 10000);
    call net_connect(conn, 'example.com', 80);
 
-/* Exactly 56 bytes: 14+2+17+2+17+2+2, no blank padding on wire. */
-/* '0D0A'x is the CRLF pair. */
+ /* Exactly 56 bytes: 14+2+17+2+17+2+2, no blank padding on wire. */
+ /* '0D0A'x is the CRLF pair. */
    req = 'GET / HTTP/1.0' || '0D0A'x || 'Host: example.com' || 
        '0D0A'x
       || 'Connection: close' || '0D0A'x || '0D0A'x;
@@ -56,7 +56,7 @@
 
    put skip list('fetched', len, 'bytes from example.com');
    if len > 0 then
-      put skip list(substr(body, 1, min(len, 500)));
+     put skip list(substr(body, 1, min(len, 500)));
 
    call net_close(conn);
    put skip list('done');

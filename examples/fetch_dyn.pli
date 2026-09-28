@@ -20,9 +20,8 @@
    dcl requested_len  fixed bin(31);
    dcl sent           fixed bin(31);
    dcl req            char(56);
-    dcl body           char(*) varying controlled;   /* TR25 rule 13:
-    asterisk bound */
-    dcl spare          char(*) varying controlled;   /* grow/trim copy */
+   dcl body           char(*) varying controlled;   
+   dcl spare          char(*) varying controlled;   
    dcl chunk          char(NET_BUF_CAP) varying;
    dcl chunk_len      fixed bin(31);
    dcl total_len      fixed bin(31) init(0);
@@ -38,15 +37,15 @@
      put skip list('timeout:', net_errtext());
      stop;
    end;
-    on condition(net_overflow) begin;
-      on condition(net_overflow) system;
-      put skip list('overflow');
-      stop;
-    end;
-    on condition(net_eof) begin;
-      on condition(net_eof) system;
-      /* fall through: net_read resumes and returns 0, the loop leaves */
-    end;
+   on condition(net_overflow) begin;
+     on condition(net_overflow) system;
+     put skip list('overflow');
+     stop;
+   end;
+   on condition(net_eof) begin;
+     on condition(net_eof) system;
+     /* fall through: net_read resumes and returns 0, the loop leaves */
+   end;
 
    conn = net_open(AF_INET, SOCK_STREAM, 0);
    if conn = null() then stop;
@@ -94,21 +93,21 @@
      total_len = total_len + chunk_len;
    end;
 
-    /* Trim to actual length, preserving the bytes via the spare */
-    if total_len < requested_len then do;
-      if total_len > 0 then do;
-         allocate spare (total_len) character varying;
-         spare = body;
-         free body;
-         allocate body (total_len) character varying;
-         body = spare;
-         free spare;
-      end;
-    end;
+   /* Trim to actual length, preserving the bytes via the spare */
+   if total_len < requested_len then do;
+     if total_len > 0 then do;
+       allocate spare (total_len) character varying;
+       spare = body;
+       free body;
+       allocate body (total_len) character varying;
+       body = spare;
+       free spare;
+     end;
+   end;
 
-    put skip list('fetched', total_len, 'bytes from example.com');
-    if total_len > 0 then
-      put skip list(substr(body, 1, total_len));
+   put skip list('fetched', total_len, 'bytes from example.com');
+   if total_len > 0 then
+     put skip list(substr(body, 1, total_len));
 
    call net_close(conn);
    free body;
