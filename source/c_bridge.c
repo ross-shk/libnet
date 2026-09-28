@@ -11,6 +11,8 @@
  *     blank-padded and not NUL-terminated, so we never rely on NUL).
  *   - most functions return 0 on success, -1 on error; errno is retained in
  *     a thread-local cache read by netc_errno().
+ *   - IPv4 only (AF_INET): address strings are 16-byte dotted quads.
+ *     AF_INET6 is reserved for a future revision with wider buffers.
  */
 
 #include <arpa/inet.h>
@@ -26,17 +28,32 @@
 #include <unistd.h>
 
 /* Thread-local errno snapshot so PL/I can read it without clobbering errno. */
-static __thread int cached_errno = 0;
+static _Thread_local int cached_errno = 0;
 
 static void save_errno(void) {
   cached_errno = errno;
+}
+
+/* Copy a PL/I string (src, srclen bytes) into a NUL-terminated C buffer.
+ * Trailing blanks/tabs are padding, not content, so trim them; this serves
+ * both VARYING (exact length) and fixed CHAR(N) (blank-padded) callers. */
+static void pli_to_cstr(const char *src, int srclen, char *dst, int dstsize) {
+  int n = srclen;
+  if (n > dstsize - 1)
+    n = dstsize - 1;
+  while (n > 0 && (src[n - 1] == ' ' || src[n - 1] == '\t'))
+    n--;
+  int i;
+  for (i = 0; i < n; ++i)
+    dst[i] = src[i];
+  dst[n] = '\0';
 }
 
 int netc_socket(int family, int type, int proto) {
   int fd = socket(family, type, proto);
   if (fd < 0)
     save_errno();
-  return(fd);
+  return fd;
 }
 
 int netc_bind(int fd, unsigned int port) {
@@ -68,14 +85,10 @@ int netc_accept(int fd) {
 }
 
 /* Resolve host to the loopback-adjacent address and connect. hostlen is the
- * PL/I char length (may be padded with blanks); we NUL-terminate a copy. */
+ * PL/I string length; trailing padding is trimmed by pli_to_cstr. */
 int netc_connect(int fd, const char *host, int hostlen, int port) {
   char hbuf[256];
-  int n = hostlen < (int)sizeof(hbuf) - 1 ? hostlen : (int)sizeof(hbuf) - 1;
-  int i;
-  for (i = 0; i < n; ++i)
-    hbuf[i] = (host[i] == ' ' || host[i] == '\t') ? '\0' : host[i];
-  hbuf[n] = '\0';
+  pli_to_cstr(host, hostlen, hbuf, sizeof hbuf);
 
   struct addrinfo hints, *res = NULL;
   memset(&hints, 0, sizeof(hints));
@@ -169,36 +182,22 @@ int netc_setnonblock(int fd, int on) {
   return 0;
 }
 
-/* poll(fd, events, ms). events bitmask: 1=POLLIN, 2=POLLOUT.
+/* poll(fd, events, ms). events uses the libnet bitmask (see type_defs.inc):
+ * 1=readable, 2=writable; mapped here onto the platform POLLIN/POLLOUT.
  * Returns the number of ready fds, 0 on timeout, -1 on error. */
 int netc_poll(int fd, int events, int ms) {
   struct pollfd p;
   p.fd = fd;
-  p.events = (short)events;
+  p.events = 0;
+  if (events & 1)
+    p.events |= POLLIN;
+  if (events & 2)
+    p.events |= POLLOUT;
   p.revents = 0;
   int r = poll(&p, 1, ms);
   if (r < 0)
     save_errno();
   return r;
-}
-
-/* Peer address into ip (16-byte dotted quad) and port. Returns 0 or -1. */
-int netc_getpeername(int fd, char *ip, int iplen, int *port) {
-  struct sockaddr_in a;
-  socklen_t alen = sizeof a;
-  if (getpeername(fd, (struct sockaddr *)&a, &alen) != 0) {
-    save_errno();
-    return -1;
-  }
-  char tmp[16];
-  inet_ntop(AF_INET, &a.sin_addr, tmp, sizeof tmp);
-  int i;
-  for (i = 0; i < iplen && tmp[i]; ++i)
-    ip[i] = tmp[i];
-  for (; i < iplen; ++i)
-    ip[i] = ' ';
-  *port = (int)ntohs(a.sin_port);
-  return 0;
 }
 
 /* Fill a dotted-quad ip (blank-padded to iplen) and port from a sockaddr. */
@@ -215,20 +214,27 @@ static void fill_sockaddr(const struct sockaddr_in *a, char *ip, int iplen,
     *port = (int)ntohs(a->sin_port);
 }
 
-/* Resolve host (blank-padded, len bytes) to a dotted-quad string in ip
- * (blank-padded to iplen). Returns 0 on success, -1 on failure. */
+/* Peer address into ip (16-byte dotted quad) and port. Returns 0 or -1. */
+int netc_getpeername(int fd, char *ip, int iplen, int *port) {
+  struct sockaddr_in a;
+  socklen_t alen = sizeof a;
+  if (getpeername(fd, (struct sockaddr *)&a, &alen) != 0) {
+    save_errno();
+    return -1;
+  }
+  fill_sockaddr(&a, ip, iplen, port);
+  return 0;
+}
+
+/* Resolve host to a dotted-quad string in ip (blank-padded to iplen).
+ * Returns 0 on success, -1 on failure. */
 int netc_resolve(const char *host, int hostlen, char *ip, int iplen) {
   char hbuf[256];
-  int n = hostlen < (int)sizeof(hbuf) - 1 ? hostlen : (int)sizeof(hbuf) - 1;
-  int i;
-  for (i = 0; i < n; ++i)
-    hbuf[i] = (host[i] == ' ' || host[i] == '\t') ? '\0' : host[i];
-  hbuf[n] = '\0';
+  pli_to_cstr(host, hostlen, hbuf, sizeof hbuf);
 
   struct addrinfo hints, *res = NULL;
   memset(&hints, 0, sizeof(hints));
   hints.ai_family = AF_INET;
-  hints.ai_socktype = SOCK_STREAM;
 
   if (getaddrinfo(hbuf, NULL, &hints, &res) != 0) {
     save_errno();
@@ -236,12 +242,7 @@ int netc_resolve(const char *host, int hostlen, char *ip, int iplen) {
   }
 
   struct sockaddr_in *sa = (struct sockaddr_in *)res->ai_addr;
-  char tmp[16];
-  inet_ntop(AF_INET, &sa->sin_addr, tmp, sizeof tmp);
-  for (i = 0; i < iplen && tmp[i]; ++i)
-    ip[i] = tmp[i];
-  for (; i < iplen; ++i)
-    ip[i] = ' ';
+  fill_sockaddr(sa, ip, iplen, NULL);
 
   freeaddrinfo(res);
   return 0;
@@ -300,17 +301,13 @@ int netc_getsockname(int fd, char *ip, int iplen, int *port) {
   return 0;
 }
 
-/* Nonblocking connect. host is blank-padded, len bytes; port by value.
+/* Nonblocking connect. host is a PL/I string, len bytes; port by value.
  * Returns 0 if the connect completed, -1 with errno EINPROGRESS if it is in
  * progress (caller should poll for writability then check netc_getsockerr),
  * -2 on other errors (errno cached). */
 int netc_connect_nb(int fd, const char *host, int hostlen, int port) {
   char hbuf[256];
-  int n = hostlen < (int)sizeof(hbuf) - 1 ? hostlen : (int)sizeof(hbuf) - 1;
-  int i;
-  for (i = 0; i < n; ++i)
-    hbuf[i] = (host[i] == ' ' || host[i] == '\t') ? '\0' : host[i];
-  hbuf[n] = '\0';
+  pli_to_cstr(host, hostlen, hbuf, sizeof hbuf);
 
   struct addrinfo hints, *res = NULL;
   memset(&hints, 0, sizeof(hints));
@@ -329,7 +326,7 @@ int netc_connect_nb(int fd, const char *host, int hostlen, int port) {
 
   int r = connect(fd, (struct sockaddr *)&a, sizeof a);
   if (r != 0 && errno == EINPROGRESS) {
-    cached_errno = EINPROGRESS;
+    save_errno();
     return -1;
   }
   if (r != 0) {
@@ -357,11 +354,7 @@ int netc_getsockerr(int fd, int *err) {
 int netc_sendto(int fd, const char *buf, int len, int flags, const char *ip,
               int iplen, int port) {
   char hbuf[256];
-  int n = iplen < (int)sizeof(hbuf) - 1 ? iplen : (int)sizeof(hbuf) - 1;
-  int i;
-  for (i = 0; i < n; ++i)
-    hbuf[i] = (ip[i] == ' ' || ip[i] == '\t') ? '\0' : ip[i];
-  hbuf[n] = '\0';
+  pli_to_cstr(ip, iplen, hbuf, sizeof hbuf);
 
   struct addrinfo hints, *res = NULL;
   memset(&hints, 0, sizeof(hints));

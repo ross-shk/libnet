@@ -23,11 +23,21 @@
       put skip list('error:', net_errtext());
       stop;
    end; /* on condition(net_error) */
-   on condition(net_timeout) begin;
-      on condition(net_timeout) system;
-      put skip list('timeout');
-      stop;
-   end; /* on condition(net_timeout) */
+    on condition(net_timeout) begin;
+       on condition(net_timeout) system;
+       put skip list('timeout');
+       stop;
+    end; /* on condition(net_timeout) */
+    on condition(net_eof) begin;
+       on condition(net_eof) system;
+       put skip list('server closed the connection');
+       stop;
+    end; /* on condition(net_eof) */
+    on condition(net_overflow) begin;
+       on condition(net_overflow) system;
+       put skip list('reply too large');
+       stop;
+    end; /* on condition(net_overflow) */
 
    conn = net_open(AF_INET, SOCK_STREAM, 0);
    if conn = null() then stop;

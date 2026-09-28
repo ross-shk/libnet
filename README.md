@@ -67,15 +67,17 @@ internal procedures, and descriptive constants.
 | `examples/echo_server.pli` | echo server + client demo |
 | `examples/client.pli` | minimal TCP client |
 | `examples/resolve.pli` | DNS resolution demo |
-| `examples/fetch.pli` | fetch example.com using manual buffer grow-loop |
+| `examples/fetch.pli` | fetch example.com via `net_read_all` (bounded auto-accumulation) |
+| `examples/fetch_dyn.pli` | fetch example.com with a manual `CONTROLLED` grow-loop |
 | `examples/http_client.pli` | fetch example.com via `net_read_all` (auto-growing buffer) |
+| `examples/test_read_all.pli`, `examples/test_resolve.pli` | scratch checks for `net_read_all` / `net_resolve` |
 
 ## Build
 
 ```bash
 make            # builds libnet.a (C bridge + compiled PL/I module) + dist/net.inc
-make test       # builds + runs the C bridge regression test (works today)
-make example    # tries the demo; shows the wishlist gaps today
+make test       # builds + runs the C bridge regression test
+make example    # trial-compiles every example against the interface include
 ```
 
 The library is a real linked module: `source/net.pli` is compiled once to
@@ -86,11 +88,10 @@ only the **interface** (`%include net;`), then links:
 make build-prog SRC=examples/echo_server.pli OUT=echo_server
 ```
 
-`make test` (the C bridge) passes today. `make all` builds the C bridge, then
-compiles `source/net.pli` — which blocks on the pli-llvm features it uses
-(`char(*)`, `CONTROLLED`, `BASED` on parameters, based-member access,
-variable-length `SUBSTR`, and `dcl ... condition`); `make example` shows exactly
-where each blocks.
+`make test` (the C bridge) passes. `make all` builds the C bridge, then
+compiles `source/net.pli` — which uses `char(*)`, `CONTROLLED`, `BASED`
+views on parameters, based-member access, variable-length `SUBSTR`, and
+`dcl ... condition`. `make example` trial-compiles every example.
 
 ## API sketch
 
@@ -114,7 +115,7 @@ on condition(net_overflow) begin; ... end;
 
 ## Bounded auto-accumulation
 
-`net_read_all` reads all data from a socket until EOF or error, accumulating into the caller's `VARYING` buffer via concatenation. Growth is automatic up to the buffer's `MAXLENGTH`; when `MAXLENGTH` is exhausted a `net_overflow` condition is raised with whatever was accumulated so far:
+`net_read_all` reads all data from a socket until EOF or error, accumulating into an internal `CONTROLLED` buffer that grows by doubling, then copying into the caller's `VARYING` buffer. Growth is automatic up to the buffer's `MAXLENGTH`; when `MAXLENGTH` is exhausted the bytes that fit are handed over and a `net_overflow` condition is raised:
 
 ```pli
 dcl resp  char(NET_BUF_CAP) varying;     /* bounded accumulator */
@@ -129,7 +130,7 @@ on condition(net_overflow) begin;
 end;
 ```
 
-This replaces the manual grow-loop from `examples/fetch.pli`:
+This replaces the manual grow-loop pattern (see `examples/fetch_dyn.pli`):
 
 ```pli
 /* Before (manual): allocate → free → realloc cycle inside loop */
@@ -198,9 +199,8 @@ is the normal "nothing ready" result (returns 0).
 
 ## Status
 
-The library is written idiomatic and complete **as if the pli-llvm wishlist is
-already implemented**, as a compiled module rather than `%include`d source.
+The library is a compiled module rather than `%include`d source.
 `make test` runs the `netc_*` bridge regression test (passing); `make all`
-builds the C bridge and then attempts the PL/I module compile, which blocks on
-the wishlist. The *program* path blocks too; the deprecated original (Iron
-Spring `linux/386`) is preserved under `deprecated/`.
+builds the C bridge and the PL/I module; `make example` trial-compiles the
+examples. The deprecated original (Iron Spring `linux/386`) is preserved
+under `deprecated/`.

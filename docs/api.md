@@ -53,7 +53,7 @@ All client procedures take a handle from `net_open` unless noted.
 | `net_close` | `(h)` | — | — |
 | `net_shutdown` | `(h, how)` | — (call) | `net_error` |
 | `net_read` | `(h, buffer, buflen)` | byte count | `net_eof`, `net_timeout`, `net_error` |
-| `net_read_all` | `(h, buffer)` | total count (EOF = normal end, no condition). Buffer auto-grows via `CONTROLLED char(*) varying` accumulation — callers may pass any `VARYING` buffer; returned data is truncated to its capacity. | `net_timeout`, `net_error`, `net_overflow` |
+| `net_read_all` | `(h, buffer)` | total count (EOF = normal end, no condition). Accumulates into an internal `CONTROLLED` buffer, then copies into the caller `VARYING` buffer up to its capacity. | `net_timeout`, `net_error`, `net_overflow` (bytes that fit are handed over first) |
 | `net_read_until` | `(h, buffer, delim)` | delimiter position | `net_eof`, `net_timeout`, `net_error`, `net_overflow` |
 | `net_write` | `(h, buffer)` | byte count | `net_timeout`, `net_error` |
 | `net_send` | `(h, buffer, flags)` | byte count | `net_timeout`, `net_error` |

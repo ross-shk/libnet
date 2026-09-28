@@ -8,13 +8,11 @@
 # libnet.a alongside the C bridge. Programs do `%include net;` (an interface
 # include: constants + conditions + external ENTRY declarations), then link
 # -lnet + libpli.a. Nothing is %included inline into the program — the library
-# is a real linked module, as if pli-llvm fully supports external PL/I
-# modules, CONTROLLED storage, char(*), BASED on params, and based-member
-# access.
+# is a real linked module, built on external PL/I modules, CONTROLLED
+# storage, char(*), BASED views on params, and based-member access.
 #
-# NOTE: `make test` (the C bridge) passes today. `make all` builds the C bridge
-# and then compiles source/net.pli, which blocks on the pli-llvm wishlist for
-# the features it uses (see WISHLIST.md). `make example` shows exactly where.
+# NOTE: `make test` (the C bridge) passes, `make all` builds the C bridge
+# and the PL/I module, and `make example` trial-compiles the examples.
 
 PLI_LLVM ?= /usr/local
 PLIC     ?= $(PLI_LLVM)/bin/plic
@@ -62,14 +60,12 @@ build-prog: libnet.a
 	$(PLIC) $(PLIFLAGS) -c $(SRC) $(INC) -o $(OUT).o
 	$(CC) -o $(OUT) $(OUT).o libnet.a $(RTLIB)
 
-# Diagnostic: attempt to compile each example against the interface include
-# and show the wishlist gap. The examples block where the program path needs
-# pli-llvm features (see WISHLIST.md); the module build is a separate step.
-EXAMPLES = examples/echo_server.pli examples/client.pli examples/resolve.pli examples/fetch.pli examples/http_client.pli
+# Trial-compile each example against the interface include.
+EXAMPLES = examples/echo_server.pli examples/client.pli examples/resolve.pli examples/fetch.pli examples/fetch_dyn.pli examples/http_client.pli examples/test_read_all.pli examples/test_resolve.pli
 example:
 	@for e in $(EXAMPLES); do \
-	  echo "== compiling $$e (expect wishlist gaps) =="; \
-	  -$(PLIC) $(PLIFLAGS) -c $$e $(INC) -o /tmp/$$(basename $$e .pli).o; \
+	  echo "== compiling $$e =="; \
+	  $(PLIC) $(PLIFLAGS) -c $$e $(INC) -o /tmp/$$(basename $$e .pli).o; \
 	done
 
 install: libnet.a $(DIST_INC)
@@ -81,9 +77,7 @@ uninstall:
 	rm -f $(DESTDIR)$(INCDIR)/net.inc $(DESTDIR)$(LIBDIR)/libnet.a
 
 # `make test` runs the C bridge regression test. It builds the test directly
-# from source/c_bridge.c so the working C path stays runnable even while the
-# PL/I module (source/net.pli) blocks on the pli-llvm wishlist. The PL/I
-# program path additionally requires that wishlist (see WISHLIST.md).
+# from source/c_bridge.c so the working C path stays runnable on its own.
 test:
 	@mkdir -p $(BUILD)
 	@$(CC) $(CFLAGS) source/c_bridge.c tests/c_bridge.c -o $(BUILD)/cb_test && \

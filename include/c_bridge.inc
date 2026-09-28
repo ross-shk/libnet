@@ -111,17 +111,15 @@
      options (linkage(system)) external ('netc_strerror');
 
  /* UDP datagrams */
- dcl netc_sendto entry (fixed bin(31), char(*), fixed bin(31),
-     fixed bin(31),
-                     char(*), fixed bin(31), fixed bin(31))
-     returns (fixed bin(31))
-     options (linkage(system)) external ('netc_sendto');
+  dcl netc_sendto entry (fixed bin(31), char(*), fixed bin(31),
+      fixed bin(31), char(*), fixed bin(31), fixed bin(31))
+      returns (fixed bin(31))
+      options (linkage(system)) external ('netc_sendto');
 
- dcl netc_recvfrom entry (fixed bin(31), char(*), fixed bin(31),
-     fixed bin(31),
-                        char(*), fixed bin(31), pointer)
-     returns (fixed bin(31))
-     options (linkage(system)) external ('netc_recvfrom');
+  dcl netc_recvfrom entry (fixed bin(31), char(*), fixed bin(31),
+      fixed bin(31), char(*), fixed bin(31), pointer)
+      returns (fixed bin(31))
+      options (linkage(system)) external ('netc_recvfrom');
 
  /* errno cache */
  dcl netc_errno entry ()

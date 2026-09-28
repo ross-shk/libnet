@@ -3,13 +3,11 @@
  test_read_all: procedure options(main);
  %include net;
 
-   dcl conn           pointer;
-   dcl requested_len  fixed bin(31);
-   dcl sent           fixed bin(31);
-   dcl req            char(56);
-   dcl body           char(NET_BUF_CAP) varying;
-   dcl total_len      fixed bin(31) init(0);
-   dcl cap            fixed bin(31) init(64);
+    dcl conn           pointer;
+    dcl sent           fixed bin(31);
+    dcl req            char(56);
+    dcl body           char(NET_BUF_CAP) varying;
+    dcl total_len      fixed bin(31) init(0);
 
    on condition(net_error) begin;
      on condition(net_error) system;
@@ -40,10 +38,9 @@
    sent = net_send_all(conn, req);
    put skip list('sent', sent, 'request bytes');
 
-   total_len = net_read_all(conn, body, cap);
+    total_len = net_read_all(conn, body);
 
-   put skip list('fetched', total_len, 'bytes from example.com');
-   put skip list('final cap:', cap);
+    put skip list('fetched', total_len, 'bytes from example.com');
    if total_len > 0 then
      put skip list(substr(body, 1, min(total_len, 200)));
 

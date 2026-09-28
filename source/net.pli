@@ -9,9 +9,8 @@
  /*            exported net_* entries and never see the connection */
  /*            layout - they hold only a POINTER handle. */
  /* */
- /* This module assumes the pli-llvm features libnet is designed for. */
- /* Supported (see WISHLIST.md): CONTROLLED storage, char(*), BASED. */
- /* BASED(P) on procedure parameters, based-member access, and */
+ /* This module uses CONTROLLED storage, char(*), BASED views */
+ /* on procedure parameters, based-member access, and */
  /* variable-length SUBSTR. Compiled once into libnet.a, */
  /* connection logic no longer %included inline into each */
  /* program. */
@@ -62,9 +61,8 @@
  /*---------------------------------------------------------------*/
  /* A connection is a CONTROLLED record. A listening server and an */
  /* accepted client share the same layout. Callers hold only a    */
- /* POINTER handle; each procedure declares a BASED view on its   */
- /* handle parameter (BASED on a procedure parameter is now       */
- /* supported), so no base-pointer copy dance is needed.          */
+ /* POINTER handle; each procedure declares a BASED view directly */
+ /* on its handle parameter, so no base-pointer copy is needed.  */
  dcl 1 conn_rec controlled aligned,
     2 fd               fixed bin(31),
     2 is_connected     bit(1),
@@ -101,19 +99,6 @@
  raise_overflow: procedure;
    signal condition(net_overflow) set oncode(NET_ERR_OVERFLOW);
  end raise_overflow;
-
- /* Find the content length of a blank-padded C output buffer. */
- trimmed_length: procedure (text) returns (fixed bin(31));
-   dcl text char(*);
-   dcl n fixed bin(31);
-
-   n = length(text);
-   do while (n > 0);
-     if substr(text, n, 1) ^= ' ' then return (n);
-     n = n - 1;
-   end;
-   return (0);
- end trimmed_length;
 
  /*---------------------------------------------------------------*/
  /* net_open                                                     */
@@ -166,13 +151,11 @@
  /* getaddrinfo. On success the peer_* fields are filled.         */
  net_connect: procedure (h, host, port);
    dcl h    pointer;
-   dcl hp   pointer;
-   dcl 1 c  based(hp) like conn_rec;
+   dcl 1 c  based(h) like conn_rec;
    dcl host char(NET_HOST_MAX) varying;
    dcl port fixed bin(31);
    dcl rc   fixed bin(31);
 
-   hp = h;
    rc = netc_connect(c.fd, host, length(host), port);
    if rc < 0 then do;
      call raise_err();
@@ -216,9 +199,7 @@
  /*---------------------------------------------------------------*/
  net_close: procedure (h);
    dcl h   pointer;
-   dcl hp  pointer;
-   dcl 1 c based(hp) like conn_rec;
-   hp = h;
+   dcl 1 c based(h) like conn_rec;
    if c.fd > 0 then call netc_close(c.fd);
    c.fd            = 0;
    c.is_connected  = '0'b;
@@ -230,11 +211,9 @@
  /* Raises:   condition(net_error) on failure.                      */
  net_shutdown: procedure (h, how);
    dcl h   pointer;
-   dcl hp  pointer;
-   dcl 1 c based(hp) like conn_rec;
+   dcl 1 c based(h) like conn_rec;
    dcl how fixed bin(31);
    dcl rc  fixed bin(31);
-   hp = h;
    rc = netc_shutdown(c.fd, how);
    if rc < 0 then call raise_err();
  end net_shutdown;
@@ -251,14 +230,12 @@
  /*           condition(net_error) on a hard error.                   */
  net_read: procedure (h, buffer, buflen) returns (fixed bin(31));
    dcl h      pointer;
-   dcl hp     pointer;
-   dcl 1 c    based(hp) like conn_rec;
+   dcl 1 c    based(h) like conn_rec;
    dcl buffer char(NET_BUF_CAP) varying;
    dcl buflen fixed bin(31);
    dcl got    fixed bin(31);
    dcl tmp    char(NET_BUF_CAP);
 
-   hp = h;
    if c.fd <= 0 then do;
      signal condition(net_error) set oncode(EBADF);
      return (0);
@@ -286,25 +263,19 @@
          Raises net_overflow if data exceeds NET_BUF_CAP. */
  net_read_all: procedure (conn, buffer) returns (fixed bin(31));
    dcl conn    pointer;
-   dcl hp      pointer;
-   dcl 1 c     based(hp) like conn_rec;
+   dcl 1 c     based(conn) like conn_rec;
    dcl buffer  char(NET_BUF_CAP) varying;
    dcl cap     fixed bin(31) init(1024);
-
    dcl internal_buff char(*) varying controlled;
    dcl spare   char(*) varying controlled;
-   dcl chunk   char(NET_BUF_CAP); /* FIXED: non-varying for C recv */
+   dcl chunk   char(NET_BUF_CAP);
    dcl chunk_len fixed bin(31);
    dcl total_len fixed bin(31) init(0);
 
-   hp = conn;
    if c.fd <= 0 then do;
      signal condition(net_error) set oncode(EBADF);
      return (0);
    end;
-
-   /* Save initial capacity for trim comparison */
-   dcl init_cap fixed bin(31) init(64);
 
    /* TR25 rule 89: ALLOCATE controlled-item with dimension-attribute
     *   controlled-allocate-item ::= [ integer ] identifier dimension-attribute
@@ -330,7 +301,6 @@
         Loop: one chunk can exceed the buffer several times over */
      do while (total_len + chunk_len > cap);
        cap = cap * 2;
-       put skip list('growing buffer to', cap, 'bytes');
        allocate spare (cap) character varying;
        spare = internal_buff;
        free internal_buff;
@@ -346,7 +316,7 @@
    end;
 
    /* Trim internal buffer to actual length if we overallocated */
-   if total_len < init_cap then do;
+   if total_len < cap then do;
      if total_len > 0 then do;
        allocate spare (total_len) character varying;
        spare = internal_buff;
@@ -357,16 +327,19 @@
      end;
    end;
 
-   /* Copy to caller's buffer, check for overflow */
+   /* Overflow: hand over what fits, then raise with the full count */
    if total_len > NET_BUF_CAP then do;
+     substr(buffer, 1, NET_BUF_CAP) =
+       substr(internal_buff, 1, NET_BUF_CAP);
      free internal_buff;
      call raise_overflow();
      return (NET_BUF_CAP);
    end;
 
-   /* Use SUBSTR assignment to copy content (direct assignment
-      may not copy data correctly for controlled varying source) */
-   substr(buffer, 1, total_len) = substr(internal_buff, 1, total_len);
+   /* Copy exactly the bytes read (internal length is cap, not total) */
+   if total_len > 0 then
+     substr(buffer, 1, total_len) = substr(internal_buff, 1, total_len);
+   else buffer = '';
    free internal_buff;
 
    return (total_len);
@@ -382,8 +355,7 @@
  /*           condition(net_overflow) if the caller buffer filled.    */
  net_read_until: procedure (h, buffer, delim) returns (fixed bin(31));
    dcl h      pointer;
-   dcl hp     pointer;
-   dcl 1 c    based(hp) like conn_rec;
+   dcl 1 c    based(h) like conn_rec;
    dcl buffer char(NET_BUF_CAP) varying;
    dcl delim  char(1);
    dcl total  fixed bin(31);
@@ -393,8 +365,7 @@
    dcl cap    fixed bin(31);
    dcl done   bit(1);
 
-   hp = h;
-   total = 0;
+   total = length(buffer);
    done  = '0'b;
    do while (^done);
      cap = NET_BUF_CAP - total;
@@ -412,7 +383,9 @@
        else call raise_err();
        return (0);
      end;
-     buffer = substr(buffer, 1, total) || substr(tmp, 1, got);
+     /* Append the new bytes after any content already in buffer */
+     if total = 0 then buffer = substr(tmp, 1, got);
+     else buffer = substr(buffer, 1, total) || substr(tmp, 1, got);
      total  = total + got;
      pos = index(buffer, delim);
      if pos > 0 then return (pos);
@@ -431,12 +404,10 @@
  /*           condition(net_error) on a hard error.                   */
  net_write: procedure (h, buffer) returns (fixed bin(31));
    dcl h      pointer;
-   dcl hp     pointer;
-   dcl 1 c    based(hp) like conn_rec;
+   dcl 1 c    based(h) like conn_rec;
    dcl buffer char(NET_BUF_CAP) varying;
    dcl n      fixed bin(31);
 
-   hp = h;
    n = netc_send(c.fd, buffer, length(buffer), 0);
    if n < 0 then do;
      if netc_errno() = EAGAIN then call raise_timeout();
@@ -448,13 +419,11 @@
 
  net_send: procedure (h, buffer, flags) returns (fixed bin(31));
    dcl h      pointer;
-   dcl hp     pointer;
-   dcl 1 c    based(hp) like conn_rec;
+   dcl 1 c    based(h) like conn_rec;
    dcl buffer char(NET_BUF_CAP) varying;
    dcl flags  fixed bin(31);
    dcl n      fixed bin(31);
 
-   hp = h;
    n = netc_send(c.fd, buffer, length(buffer), flags);
    if n < 0 then do;
      if netc_errno() = EAGAIN then call raise_timeout();
@@ -471,8 +440,7 @@
  /* Raises:   condition(net_error) on a hard (non-EAGAIN) error.      */
  net_send_all: procedure (h, buffer) returns (fixed bin(31));
    dcl h      pointer;
-   dcl hp     pointer;
-   dcl 1 c    based(hp) like conn_rec;
+   dcl 1 c    based(h) like conn_rec;
    dcl buffer char(NET_BUF_CAP) varying;
    dcl total  fixed bin(31);
    dcl want   fixed bin(31);
@@ -480,7 +448,6 @@
    dcl chunk  char(NET_BUF_CAP);
    dcl take   fixed bin(31);
 
-   hp = h;
    total = 0;
    want  = length(buffer);
    do while (total < want);
@@ -506,13 +473,11 @@
  /* Raises:   condition(net_timeout) / condition(net_error).          */
  net_send_once: procedure (h, buffer, flags) returns (fixed bin(31));
    dcl h      pointer;
-   dcl hp     pointer;
-   dcl 1 c    based(hp) like conn_rec;
+   dcl 1 c    based(h) like conn_rec;
    dcl buffer char(NET_BUF_CAP) varying;
    dcl flags  fixed bin(31);
    dcl n      fixed bin(31);
 
-   hp = h;
    n = netc_send(c.fd, buffer, length(buffer), flags);
    if n < 0 then do;
      if netc_errno() = EAGAIN then call raise_timeout();
@@ -535,13 +500,11 @@
  /* Raises:   condition(net_error) on a hard error.                   */
  net_poll: procedure (h, events, ms) returns (fixed bin(31));
    dcl h      pointer;
-   dcl hp     pointer;
-   dcl 1 c    based(hp) like conn_rec;
+   dcl 1 c    based(h) like conn_rec;
    dcl events fixed bin(31);
    dcl ms     fixed bin(31);
    dcl r      fixed bin(31);
 
-   hp = h;
    r = netc_poll(c.fd, events, ms);
    if r < 0 then call raise_err();
 
@@ -552,13 +515,11 @@
  /* Raises:   condition(net_error) on failure.                        */
  net_set_timeout: procedure (h, rto, wto);
    dcl h   pointer;
-   dcl hp  pointer;
-   dcl 1 c based(hp) like conn_rec;
+   dcl 1 c based(h) like conn_rec;
    dcl rto fixed bin(31);
    dcl wto fixed bin(31);
    dcl rc  fixed bin(31);
 
-   hp = h;
    rc = netc_settimeout(c.fd, rto, wto);
    if rc < 0 then do;
      call raise_err();
@@ -573,12 +534,10 @@
  /* Raises:   condition(net_error) on failure.                        */
  net_set_nonblocking: procedure (h, on);
    dcl h  pointer;
-   dcl hp pointer;
-   dcl 1 c based(hp) like conn_rec;
+   dcl 1 c based(h) like conn_rec;
    dcl on bit(1);
    dcl rc fixed bin(31);
 
-   hp = h;
    if on then rc = netc_setnonblock(c.fd, 1);
    else       rc = netc_setnonblock(c.fd, 0);
 
@@ -593,13 +552,11 @@
  /* Raises:   condition(net_error) on failure.                        */
  net_setopt: procedure (h, opt, value);
    dcl h     pointer;
-   dcl hp    pointer;
-   dcl 1 c   based(hp) like conn_rec;
+   dcl 1 c   based(h) like conn_rec;
    dcl opt   fixed bin(31);
    dcl value fixed bin(31);
    dcl rc    fixed bin(31);
 
-   hp = h;
    rc = netc_sockopt(c.fd, opt, value);
    if rc < 0 then call raise_err();
  end net_setopt;
@@ -608,13 +565,11 @@
  /* Raises:   condition(net_error) on failure.                        */
  net_set_linger: procedure (h, on, seconds);
    dcl h       pointer;
-   dcl hp      pointer;
-   dcl 1 c     based(hp) like conn_rec;
+   dcl 1 c     based(h) like conn_rec;
    dcl on      fixed bin(31);
    dcl seconds fixed bin(31);
    dcl rc      fixed bin(31);
 
-   hp = h;
    rc = netc_setlinger(c.fd, on, seconds);
 
    if rc < 0 then call raise_err();
@@ -627,44 +582,30 @@
  /* Raises:   condition(net_error) on failure.                        */
  net_peer: procedure (h, ip, port);
    dcl h    pointer;
-   dcl hp   pointer;
-   dcl 1 c  based(hp) like conn_rec;
+   dcl 1 c  based(h) like conn_rec;
    dcl ip   char(16) varying;
    dcl port fixed bin(31);
    dcl rc   fixed bin(31);
-   dcl n    fixed bin(31);
    dcl tmp  char(16);
 
-   hp = h;
    rc = netc_getpeername(c.fd, tmp, 16, addr(port));
    if rc < 0 then call raise_err();
-   else do;
-     n = trimmed_length(tmp);
-     if n = 0 then ip = '';
-     else ip = substr(tmp, 1, n);
-   end;
+   else ip = trim(tmp);
  end net_peer;
 
  /* Fill ip/port with the local (bound) address.                      */
  /* Raises:   condition(net_error) on failure.                        */
  net_local: procedure (h, ip, port);
    dcl h    pointer;
-   dcl hp   pointer;
-   dcl 1 c  based(hp) like conn_rec;
+   dcl 1 c  based(h) like conn_rec;
    dcl ip   char(16) varying;
    dcl port fixed bin(31);
    dcl rc   fixed bin(31);
-   dcl n    fixed bin(31);
    dcl tmp  char(16);
 
-   hp = h;
    rc = netc_getsockname(c.fd, tmp, 16, addr(port));
    if rc < 0 then call raise_err();
-   else do;
-     n = trimmed_length(tmp);
-     if n = 0 then ip = '';
-     else ip = substr(tmp, 1, n);
-   end;
+   else ip = trim(tmp);
  end net_local;
 
  /*-------------------------------------------------------------------*/
@@ -677,16 +618,11 @@
    dcl host char(NET_HOST_MAX) varying;
    dcl ip   char(16) varying;
    dcl rc   fixed bin(31);
-   dcl n    fixed bin(31);
    dcl tmp  char(16);
 
    rc = netc_resolve(host, length(host), tmp, 16);
    if rc < 0 then call raise_err();
-   else do;
-     n = trimmed_length(tmp);
-     if n = 0 then ip = '';
-     else ip = substr(tmp, 1, n);
-   end;
+   else ip = trim(tmp);
  end net_resolve;
 
  /*-------------------------------------------------------------------*/
@@ -696,14 +632,10 @@
  net_strerror: procedure (e, buf);
    dcl e   fixed bin(31);
    dcl buf char(NET_BUF_CAP) varying;
-   dcl n   fixed bin(31);
    dcl tmp char(NET_BUF_CAP);
 
    call netc_strerror(e, tmp, NET_BUF_CAP);
-
-   n = trimmed_length(tmp);
-   if n = 0 then buf = '';
-   else buf = substr(tmp, 1, n);
+   buf = trim(tmp);
  end net_strerror;
 
  /*-------------------------------------------------------------------*/
@@ -718,13 +650,11 @@
  /* Raises:   condition(net_error) on a hard connect failure.         */
  net_connect_nb: procedure (h, host, port);
    dcl h    pointer;
-   dcl hp   pointer;
-   dcl 1 c  based(hp) like conn_rec;
+   dcl 1 c  based(h) like conn_rec;
    dcl host char(NET_HOST_MAX) varying;
    dcl port fixed bin(31);
    dcl rc   fixed bin(31);
 
-   hp = h;
    call netc_setnonblock(c.fd, 1);
 
    rc = netc_connect_nb(c.fd, host, length(host), port);
@@ -744,12 +674,10 @@
  /* Raises:   condition(net_error) if the connect ultimately failed.  */
  net_connect_finish: procedure (h);
    dcl h  pointer;
-   dcl hp pointer;
-   dcl 1 c based(hp) like conn_rec;
+   dcl 1 c based(h) like conn_rec;
    dcl e  fixed bin(31);
    dcl rc fixed bin(31);
 
-   hp = h;
    e = 0;
    rc = netc_getsockerr(c.fd, addr(e));
    if rc < 0 then do;
@@ -776,14 +704,12 @@
  /*           otherwise.                                              */
  net_sendto: procedure (h, buffer, ip, port) returns (fixed bin(31));
    dcl h      pointer;
-   dcl hp     pointer;
-   dcl 1 c    based(hp) like conn_rec;
+   dcl 1 c    based(h) like conn_rec;
    dcl buffer char(NET_BUF_CAP) varying;
    dcl ip     char(16) varying;
    dcl port   fixed bin(31);
    dcl n      fixed bin(31);
 
-   hp = h;
    n = netc_sendto(c.fd, buffer, length(buffer), 0,
                    ip, length(ip), port);
    if n < 0 then do;
@@ -803,17 +729,14 @@
  /*           otherwise.                                              */
  net_recvfrom: procedure (h, buffer, ip, port) returns (fixed bin(31));
    dcl h      pointer;
-   dcl hp     pointer;
-   dcl 1 c    based(hp) like conn_rec;
+   dcl 1 c    based(h) like conn_rec;
    dcl buffer char(NET_BUF_CAP) varying;
    dcl ip     char(16) varying;
    dcl port   fixed bin(31);
    dcl n      fixed bin(31);
-   dcl alen   fixed bin(31);
    dcl rbuf   char(NET_BUF_CAP);
    dcl raddr  char(16);
 
-   hp = h;
    n = netc_recvfrom(c.fd, rbuf, NET_BUF_CAP, 0, raddr, 16, addr(port));
    if n < 0 then do;
      if netc_errno() = EAGAIN then call raise_timeout();
@@ -821,11 +744,10 @@
      return (0);
    end;
 
-   buffer = substr(rbuf, 1, n);
-   alen = trimmed_length(raddr);
-
-   if alen = 0 then ip = '';
-   else ip = substr(raddr, 1, alen);
+   /* A zero-length datagram is valid data, not EOF */
+   if n > 0 then buffer = substr(rbuf, 1, n);
+   else buffer = '';
+   ip = trim(raddr);
 
    return (n);
  end net_recvfrom;
@@ -863,8 +785,9 @@
    conn_rec.is_connected  = '1'b;
    conn_rec.read_timeout  = 0;
    conn_rec.write_timeout = 0;
+   conn_rec.peer_ip       = '';
+   conn_rec.peer_port     = 0;
    conn_rec.in_len        = 0;
-   
    h = addr(conn_rec);
 
    return (h);
@@ -878,11 +801,9 @@
  net_accept: procedure (server, client);
    dcl server pointer;
    dcl client pointer;
-   dcl sp     pointer;
-   dcl 1 s    based(sp) like conn_rec;
+   dcl 1 s    based(server) like conn_rec;
    dcl cfd    fixed bin(31);
 
-   sp = server;
    cfd = netc_accept(s.fd);
    if cfd < 0 then do;
      call raise_err();
@@ -894,6 +815,8 @@
    conn_rec.is_connected  = '1'b;
    conn_rec.read_timeout  = 0;
    conn_rec.write_timeout = 0;
+   conn_rec.peer_ip       = '';
+   conn_rec.peer_port     = 0;
    conn_rec.in_len        = 0;
    client = addr(conn_rec);
  end net_accept;

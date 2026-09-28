@@ -26,8 +26,12 @@ void netc_clearerr(void);
 int  netc_sendto(int, const char *, int, int, const char *, int, int);
 int  netc_recvfrom(int, char *, int, int, char *, int, int *);
 int  netc_connect_nb(int, const char *, int, int);
+int  netc_poll(int, int, int);
 
 #define AF_INET 2
+/* Libnet poll mask (see type_defs.inc): 1=readable, 2=writable. */
+#define NET_POLLIN 1
+#define NET_POLLOUT 2
 
 static int fails = 0;
 static void check(int cond, const char *what) {
@@ -95,6 +99,21 @@ int main(void) {
   check(r >= -1, "connect_nb (done or in-progress)");
   netc_strerror(netc_errno(), buf, 64);
   check(buf[0] != '\0', "strerror nonempty");
+
+  printf("poll mask mapping\n");
+  {
+    /* A fresh UDP socket is always writable; nothing is readable yet.
+     * With the old passthrough this polled POLLPRI instead of POLLOUT. */
+    int u = netc_socket(AF_INET, 2, 17);
+    check(u >= 0, "poll socket");
+    netc_clearerr();
+    r = netc_poll(u, NET_POLLOUT, 0);
+    check(r == 1, "poll writable via libnet POLLOUT");
+    netc_clearerr();
+    r = netc_poll(u, NET_POLLIN, 0);
+    check(r == 0, "poll no-data timeout 0");
+    netc_close(u);
+  }
 
   netc_close(fd);
   netc_close(fd2);
