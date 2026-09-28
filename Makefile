@@ -29,7 +29,7 @@ PKGDIR ?= $(LIBDIR)/pkgconfig
 
 INC      = -I include
 OBJS     = c_bridge.o net.o
-BUILD   ?= .build
+BUILD   ?= build
 DIST_INC = dist/net.inc
 
 INC_SRCS = include/net.inc include/type_defs.inc include/errno.inc
@@ -55,10 +55,13 @@ $(DIST_INC): $(INC_SRCS)
 	done
 
 # Compile one program (PL/I) and link the C bridge + PL/I module + runtime.
+# Default output goes to $(BUILD)/, but OUT can override the full path.
 build-prog: libnet.a
-	@test -n "$(SRC)" || { echo "usage: make build-prog SRC=examples/foo.pli OUT=foo"; exit 1; }
-	$(PLIC) $(PLIFLAGS) -c $(SRC) $(INC) -o $(OUT).o
-	$(CC) -o $(OUT) $(OUT).o libnet.a $(RTLIB)
+	@test -n "$(SRC)" || { echo "usage: make build-prog SRC=examples/foo.pli [OUT=foo]"; exit 1; }
+	@mkdir -p $(BUILD)
+	$(eval OUT_PATH := $(if $(OUT),$(OUT),$(BUILD)/$(basename $(notdir $(SRC)))))
+	$(PLIC) $(PLIFLAGS) -c $(SRC) $(INC) -o $(OUT_PATH).o
+	$(CC) -o $(OUT_PATH) $(OUT_PATH).o libnet.a $(RTLIB)
 
 # Trial-compile each example against the interface include.
 EXAMPLES = examples/echo_server.pli examples/client.pli examples/resolve.pli examples/fetch.pli examples/fetch_dyn.pli examples/http_client.pli examples/test_read_all.pli examples/test_resolve.pli
@@ -85,4 +88,7 @@ test:
 
 clean:
 	rm -f $(OBJS) libnet.a
+	rm -f *.o *.ll
+	rm -f examples/*.o examples/*.ll
+	rm -f examples/echo_server examples/client examples/resolve examples/fetch examples/fetch_dyn examples/http_client examples/test_read_all examples/test_resolve
 	rm -rf dist $(BUILD)
