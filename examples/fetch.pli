@@ -18,7 +18,7 @@
   dcl len   fixed bin(31);         /* total bytes read */
   dcl sent  fixed bin(31);
   dcl req   char(56);
-  dcl body  char(NET_BUF_CAP) varying;
+  dcl body  char(*) varying controlled;
 
    /* ON units: each re-arms so failure inside does not recurse. */
    on condition(net_error) begin;
@@ -31,11 +31,6 @@
      put skip list('timeout:', net_errtext());
      stop;
    end;  /* on condition(net_timeout) */
-   on condition(net_overflow) begin;
-     on condition(net_overflow) system;
-     put skip list('overflow');
-     stop;
-   end;  /* on condition(net_overflow) */
 
    conn = net_open(AF_INET, SOCK_STREAM, 0);
    if conn = null() then stop;

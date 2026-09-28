@@ -1,13 +1,12 @@
- /* http_client.pli - fetch using net_read_all. */
+ /* simple_usage.pli - fetch using net_read_all. */
  /* */
- /* Module:    http_client */
+ /* Module:    simple_usage */
  /* Purpose:   Connect to example.com:80, send GET /, */
  /*            read full reply using net_read_all. */
- /* Usage:     make build-prog SRC=examples/http_client */
- /*            ./http_client */
- /* Compiles with compiled net module (link -lnet). */
+ /* Usage:     make build-prog SRC=examples/simple_usage */
+ /*            ./simple_usage */
 
- http_client: procedure options(main);
+ usage: proc options(main);
  %include net;
 
    dcl conn           pointer;
@@ -21,16 +20,11 @@
      on condition(net_error) system;
      put skip list('error:', net_errtext());
      stop;
-   end; /* on condition(net_error) */
-   on condition(net_timeout) begin;
-     on condition(net_timeout) system;
-     put skip list('timeout:', net_errtext());
-     stop;
-   end; /* on condition(net_timeout) */
+   end;
    on condition(net_eof) begin;
      on condition(net_eof) system;
      /* Fall through: net_read_all returns 0 on EOF. */
-   end; /* on condition(net_eof) */
+   end;
 
    /* Open connection with timeouts and connect. */
    conn = net_open(AF_INET, SOCK_STREAM, 0);
@@ -56,4 +50,4 @@
    /* Close connection. */
    call net_close(conn);
    put skip list('done');
- end http_client;
+  end;

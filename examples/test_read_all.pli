@@ -6,7 +6,7 @@
     dcl conn           pointer;
     dcl sent           fixed bin(31);
     dcl req            char(56);
-    dcl body           char(NET_BUF_CAP) varying;
+    dcl body           char(*) varying controlled;
     dcl total_len      fixed bin(31) init(0);
 
    on condition(net_error) begin;

@@ -47,7 +47,7 @@
  dcl net_read       entry (pointer, char(NET_BUF_CAP) varying,
     fixed bin(31))
     returns (fixed bin(31)) external;
-  dcl net_read_all   entry (pointer, char(NET_BUF_CAP) varying)
+  dcl net_read_all   entry (pointer, char(*) varying controlled)
      returns (fixed bin(31)) external;
  dcl net_read_until entry (pointer, char(NET_BUF_CAP) varying, char(1))
     returns (fixed bin(31)) external;
