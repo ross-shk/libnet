@@ -105,7 +105,7 @@
  /* Find the content length of a blank-padded C output buffer. */
  trimmed_length: procedure (text) returns (fixed bin(31));
    dcl text char(*);
-   dcl n    fixed bin(31);
+   dcl n fixed bin(31);
 
    n = length(text);
    do while (n > 0);
@@ -146,9 +146,9 @@
 
    conn_rec.fd = netc_socket(family, type, proto);
    if conn_rec.fd < 0 then do;
-      call raise_err();
-      free conn_rec;
-      return (null());
+     call raise_err();
+     free conn_rec;
+     return (null());
    end;
 
    h = addr(conn_rec);
@@ -199,9 +199,9 @@
 
    colon = index(hostport, ':');
    if colon = 0 then do;
-      signal condition(net_error) set oncode(EINVAL);
-      h = null();
-      return;
+     signal condition(net_error) set oncode(EINVAL);
+     h = null();
+     return;
    end;
    hoststr = substr(hostport, 1, colon - 1);
    portstr = substr(hostport, colon + 1, length(hostport) - colon);
@@ -260,25 +260,25 @@
 
    hp = h;
    if c.fd <= 0 then do;
-      signal condition(net_error) set oncode(EBADF);
-      return (0);
+     signal condition(net_error) set oncode(EBADF);
+     return (0);
    end;
 
    got = netc_recv(c.fd, tmp, min(buflen, NET_BUF_CAP), 0);
    if got = 0 then do;
-      call raise_eof();
-      return (0);
+     call raise_eof();
+     return (0);
    end;
    if got < 0 then do;
-      if netc_errno() = EAGAIN then call raise_timeout();
-      else call raise_err();
-      return (0);
+     if netc_errno() = EAGAIN then call raise_timeout();
+     else call raise_err();
+     return (0);
    end;
    buffer = substr(tmp, 1, got);
    return (got);
  end net_read;
 
-/* Read everything from conn into buffer, growing an internal
+ /* Read everything from conn into buffer, growing an internal
          CONTROLLED buffer as needed, then copy to caller's buffer.
          conn : open connection
          buffer : caller's buffer (max NET_BUF_CAP bytes)
@@ -289,88 +289,88 @@
    dcl hp      pointer;
    dcl 1 c     based(hp) like conn_rec;
    dcl buffer  char(NET_BUF_CAP) varying;
-        dcl cap     fixed bin(31) init(1024);
+   dcl cap     fixed bin(31) init(1024);
 
-dcl internal_buff char(*) varying controlled;
-        dcl spare   char(*) varying controlled;
-        dcl chunk   char(NET_BUF_CAP);        /* FIXED: non-varying for
-        C recv */
-        dcl chunk_len fixed bin(31);
-        dcl total_len fixed bin(31) init(0);
+   dcl internal_buff char(*) varying controlled;
+   dcl spare   char(*) varying controlled;
+   dcl chunk   char(NET_BUF_CAP); /* FIXED: non-varying for C recv */
+   dcl chunk_len fixed bin(31);
+   dcl total_len fixed bin(31) init(0);
 
-hp = conn;
-        if c.fd <= 0 then do;
-           signal condition(net_error) set oncode(EBADF);
-           return (0);
-        end;
+   hp = conn;
+   if c.fd <= 0 then do;
+     signal condition(net_error) set oncode(EBADF);
+     return (0);
+   end;
 
-        /* Save initial capacity for trim comparison */
-        dcl init_cap fixed bin(31) init(64);
+   /* Save initial capacity for trim comparison */
+   dcl init_cap fixed bin(31) init(64);
 
-        /* TR25 rule 89: ALLOCATE controlled-item with dimension-attribute
-         *   controlled-allocate-item ::= [ integer ] identifier dimension-attribute
-         *                                    [ string-attribute ... ]
-         * Here: ALLOCATE internal_buff (cap) CHARACTER VARYING;
-         */
-        allocate internal_buff (cap) character varying;
+   /* TR25 rule 89: ALLOCATE controlled-item with dimension-attribute
+    *   controlled-allocate-item ::= [ integer ] identifier dimension-attribute
+    *                                    [ string-attribute ... ]
+    * Here: ALLOCATE internal_buff (cap) CHARACTER VARYING;
+    */
+   allocate internal_buff (cap) character varying;
 
-       /* Read in chunks, growing CONTROLLED string as needed */
-       do while ('1'b);
-         chunk_len = netc_recv(c.fd, chunk, NET_BUF_CAP, 0);
-         if chunk_len = 0 then leave;  /* EOF */
+   /* Read in chunks, growing CONTROLLED string as needed */
+   do while ('1'b);
+     chunk_len = netc_recv(c.fd, chunk, NET_BUF_CAP, 0);
+     if chunk_len = 0 then leave;  /* EOF */
 
-         if chunk_len < 0 then do;
-           if netc_errno() = EAGAIN then call raise_timeout();
-           else call raise_err();
-           free internal_buff;
-           return (total_len);
-         end;
+     if chunk_len < 0 then do;
+       if netc_errno() = EAGAIN then call raise_timeout();
+       else call raise_err();
+       free internal_buff;
+       return (total_len);
+     end;
 
-         /* Grow: ALLOCATE pushes a fresh generation, so copy internal_buff
-            aside first (FREE would discard the bytes read so far).
-            Loop: one chunk can exceed the buffer several times over */
-         do while (total_len + chunk_len > cap);
-           cap = cap * 2;
-           put skip list('growing buffer to', cap, 'bytes');
-           allocate spare (cap) character varying;
-           spare = internal_buff;
-           free internal_buff;
-           allocate internal_buff (cap) character varying;
-           internal_buff = spare;
-           free spare;
-         end;
+     /* Grow: ALLOCATE pushes a fresh generation, so copy internal_buff
+        aside first (FREE would discard the bytes read so far).
+        Loop: one chunk can exceed the buffer several times over */
+     do while (total_len + chunk_len > cap);
+       cap = cap * 2;
+       put skip list('growing buffer to', cap, 'bytes');
+       allocate spare (cap) character varying;
+       spare = internal_buff;
+       free internal_buff;
+       allocate internal_buff (cap) character varying;
+       internal_buff = spare;
+       free spare;
+     end;
 
-         /* Append chunk to internal_buff using SUBSTR assignment */
-         substr(internal_buff, total_len + 1, chunk_len) =
-           substr(chunk, 1, chunk_len);
-         total_len = total_len + chunk_len;
-       end;
+     /* Append chunk to internal_buff using SUBSTR assignment */
+     substr(internal_buff, total_len + 1, chunk_len) =
+       substr(chunk, 1, chunk_len);
+     total_len = total_len + chunk_len;
+   end;
 
-/* Trim internal buffer to actual length if we overallocated */
-        if total_len < init_cap then do;
-          if total_len > 0 then do;
-            allocate spare (total_len) character varying;
-            spare = internal_buff;
-            free internal_buff;
-            allocate internal_buff (total_len) character varying;
-            internal_buff = spare;
-            free spare;
-          end;
-        end;
+   /* Trim internal buffer to actual length if we overallocated */
+   if total_len < init_cap then do;
+     if total_len > 0 then do;
+       allocate spare (total_len) character varying;
+       spare = internal_buff;
+       free internal_buff;
+       allocate internal_buff (total_len) character varying;
+       internal_buff = spare;
+       free spare;
+     end;
+   end;
 
-        /* Copy to caller's buffer, check for overflow */
-        if total_len > NET_BUF_CAP then do;
-          free internal_buff;
-          call raise_overflow();
-          return (NET_BUF_CAP);
-        end;
+   /* Copy to caller's buffer, check for overflow */
+   if total_len > NET_BUF_CAP then do;
+     free internal_buff;
+     call raise_overflow();
+     return (NET_BUF_CAP);
+   end;
 
-        /* Use SUBSTR assignment to copy content (direct assignment
-           may not copy data correctly for controlled varying source) */
-        substr(buffer, 1, total_len) = substr(internal_buff, 1, total_len);
-        free internal_buff;
-        return (total_len);
-     end net_read_all;
+   /* Use SUBSTR assignment to copy content (direct assignment
+      may not copy data correctly for controlled varying source) */
+   substr(buffer, 1, total_len) = substr(internal_buff, 1, total_len);
+   free internal_buff;
+
+   return (total_len);
+ end net_read_all;
 
  /* Read until a delimiter character is seen, appending               */
  /* received bytes to buffer.                                         */
@@ -495,6 +495,7 @@ hp = conn;
      if n = 0 then iterate;
      total = total + n;
    end; /* do while */
+
    return (total);
  end net_send_all;
 
@@ -518,6 +519,7 @@ hp = conn;
      else call raise_err();
      return (0);
    end;
+
    return (n);
  end net_send_once;
 
@@ -542,6 +544,7 @@ hp = conn;
    hp = h;
    r = netc_poll(c.fd, events, ms);
    if r < 0 then call raise_err();
+
    return (r);
  end net_poll;
 
@@ -561,6 +564,7 @@ hp = conn;
      call raise_err();
      return;
    end;
+
    c.read_timeout  = rto;
    c.write_timeout = wto;
  end net_set_timeout;
@@ -577,6 +581,7 @@ hp = conn;
    hp = h;
    if on then rc = netc_setnonblock(c.fd, 1);
    else       rc = netc_setnonblock(c.fd, 0);
+
    if rc < 0 then call raise_err();
  end net_set_nonblocking;
 
@@ -611,6 +616,7 @@ hp = conn;
 
    hp = h;
    rc = netc_setlinger(c.fd, on, seconds);
+
    if rc < 0 then call raise_err();
  end net_set_linger;
 
@@ -692,7 +698,9 @@ hp = conn;
    dcl buf char(NET_BUF_CAP) varying;
    dcl n   fixed bin(31);
    dcl tmp char(NET_BUF_CAP);
+
    call netc_strerror(e, tmp, NET_BUF_CAP);
+
    n = trimmed_length(tmp);
    if n = 0 then buf = '';
    else buf = substr(tmp, 1, n);
@@ -718,6 +726,7 @@ hp = conn;
 
    hp = h;
    call netc_setnonblock(c.fd, 1);
+
    rc = netc_connect_nb(c.fd, host, length(host), port);
    if rc = 0 then do;
      c.is_connected = '1'b;
@@ -747,10 +756,12 @@ hp = conn;
      call raise_err();
      return;
    end;
+
    if e ^= 0 then do;
      signal condition(net_error) set oncode(e);
      return;
    end;
+
    c.is_connected = '1'b;
  end net_connect_finish;
 
@@ -780,6 +791,7 @@ hp = conn;
      else call raise_err();
      return (0);
    end;
+
    return (n);
  end net_sendto;
 
@@ -808,10 +820,13 @@ hp = conn;
      else call raise_err();
      return (0);
    end;
+
    buffer = substr(rbuf, 1, n);
    alen = trimmed_length(raddr);
+
    if alen = 0 then ip = '';
    else ip = substr(raddr, 1, alen);
+
    return (n);
  end net_recvfrom;
 
@@ -830,11 +845,13 @@ hp = conn;
      call raise_err();
      return (null());
    end;
+
    if netc_bind(fd, port) < 0 then do;
      call raise_err();
      call netc_close(fd);
      return (null());
    end;
+
    if netc_listen(fd, backlog) < 0 then do;
      call raise_err();
      call netc_close(fd);
@@ -847,7 +864,9 @@ hp = conn;
    conn_rec.read_timeout  = 0;
    conn_rec.write_timeout = 0;
    conn_rec.in_len        = 0;
+   
    h = addr(conn_rec);
+
    return (h);
  end net_listen;
 
