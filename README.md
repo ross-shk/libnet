@@ -1,76 +1,96 @@
 # libnet — PL/I-centric socket library (thin C, PL/I does the work)
 
+## Requirements
+
+- **pli-llvm** — modern open-source PL/I compiler targetting LLVM
+  - GitHub: [https://github.com/pli-llvm/pli-llvm](https://github.com/pli-llvm/pli-llvm)
+  - Required for compiling `source/net.pli` and linking the C bridge (`source/c_bridge.c`)
+- **make** — standard build tool
+- **C compiler** (clang/gcc) — for the C bridge
+
+## Quick Start
+
+```bash
+# Build the library
+make
+
+# Compile and run the simple example
+make build-prog SRC=examples/simple_usage.pli
+./simple_usage
+```
+
+The example (see `examples\simple_usage.pli`) connects to `example.com:80`, sends an HTTP GET request, and reads the full response using `net_read_all`:
+
+```pli
+%include net;
+
+dcl conn      pointer;
+dcl resp      char(*) varying controlled;
+
+conn = net_open(AF_INET, SOCK_STREAM, 0);
+call net_set_timeout(conn, 10000, 10000);
+call net_connect(conn, 'example.com', 80);
+call net_send_all(conn, 'GET / HTTP/1.0' || '0D0A'x
+   || 'Host: example.com' || '0D0A'x || 'Connection: close' || '0D0A0A'x);
+len = net_read_all(conn, resp);
+put skip list('fetched', len, 'bytes');
+call net_close(conn);
+```
+
+## Architecture
+
 A connection-oriented socket library whose design inverts the usual split:
 
-- **minimal C** (`source/c_bridge.c`): only the raw syscalls PL/I cannot
-  perform — `socket/bind/listen/accept/connect/send/recv/close/shutdown/
-  settimeout/setnonblock/poll/getpeername` plus an `errno` cache. Reached from
-  PL/I through pli-llvm's by-value C FFI.
-- **most processing in PL/I** (`source/net.pli`, a compiled module): the
-  connection pool, receive buffering, delimiter scanning, retry loops,
-  timeout and error policy — all in PL/I, using `CONTROLLED` storage and
-  pointer handles. The module is archived into `libnet.a` alongside the C
-  bridge, so programs link it like any library instead of `%include`ing the
-  implementation.
+- **minimal C** (`source/c_bridge.c`): only the raw syscalls PL/I cannot perform — `socket/bind/listen/accept/connect/send/recv/close/shutdown/ settimeout/setnonblock/poll/getpeername` plus an `errno` cache. Reached from PL/I through pli-llvm's by-value C FFI.
+- **most processing in PL/I** (`source/net.pli`, a compiled module): the connection pool, receive buffering, delimiter scanning, retry loops, timeout and error policy — all in PL/I, using `CONTROLLED` storage and pointer handles. The module is archived into `libnet.a` alongside the C bridge, so programs link it like any library instead of `%include`ing the implementation.
 
-Callers hold only a `POINTER` handle; the connection structure layout is
-private to the library. This is the classic PL/I "fat runtime / task context"
-pattern — well-suited to AI-authored PL/I, where a handful of thin PL/I calls
-replace a page of socket bookkeeping.
+Callers hold only a `POINTER` handle; the connection structure layout is private to the library. This is the classic PL/I "fat runtime / task context" pattern — well-suited to AI-authored PL/I, where a handful of thin PL/I calls replace a page of socket bookkeeping.
 
-## Style
+### Style
 
-The PL/I follows classic PL/I conventions drawn from the reference corpus
-(`references/text/PL:I Programming Style.txt`, Iron Spring samples):
+The PL/I follows classic PL/I conventions:
 
-- `CONTROLLED` connection records declared `ALIGNED` for efficient member
-  access;
-- a module header (name / author / purpose / calling sequence) atop every
-  include;
-- declarations grouped by kind (parameters, automatic, builtins) and
-  commented by section, with `%page`-style block separators;
-- errno exposed as `%replace` named constants (`errno.inc`, after Iron
-  Spring's `lib/include/errno.inc`) rather than magic numbers;
-- ON-units kept to a single action and re-arming the condition (`ON ... SYSTEM;`)
-  inside the unit so a failure cannot recurse;
+- `CONTROLLED` connection records declared `ALIGNED` for efficient member access;
+- a module header (name / author / purpose / calling sequence) atop every include;
+- declarations grouped by kind (parameters, automatic, builtins) and commented by section;
+- errno exposed as `%replace` named constants (`errno.inc`) rather than magic numbers;
+- ON-units kept to a single action and re-arming the condition (`ON ... SYSTEM;`) inside the unit so a failure cannot recurse;
 - `SELECT` over laddered `IF` for multi-way dispatch.
 
-## Naming
+### Naming
 
-Names follow classic PL/I convention: short meaningful module prefixes (the
-Iron Spring runtime `_pli_`, MULTICS networking `net_`), lowercase verbs for
-internal procedures, and descriptive constants.
+Names follow classic PL/I convention: short meaningful module prefixes, lowercase verbs for internal procedures, and descriptive constants.
 
-| Layer | Prefix / form | Example |
-|---|---|---|
-| C bridge (system primitives) | `netc_` | `netc_socket`, `netc_recv`, `netc_sockopt` |
-| Public PL/I procedures | `net_` | `net_open`, `net_connect`, `net_read_until` |
-| Option codes | `NETOPT_*` | `NETOPT_REUSEADDR`, `NETOPT_KEEPALIVE`, `NETOPT_NODELAY` |
-| Status codes | `NET_ERR_*` | `NET_ERR_EOF`, `NET_ERR_TIMEOUT`, `NET_ERR_OVERFLOW` (oncode sentinels) |
-| errno constants | `E*` | `EAGAIN`, `EBADF`, `ECONNREFUSED` (in `errno.inc`) |
-| POSIX mirror | as-is | `AF_INET`, `SOCK_STREAM`, `SHUT_WR`, `POLLIN` |
-| Conditions | lowercase | `net_error`, `net_timeout`, `net_eof`, `net_overflow` |
-| Internal helpers | lowercase verbs | `raise_err`, `raise_timeout`, `raise_eof`, `raise_overflow` |
+| Layer                        | Prefix / form   | Example                                                                 |
+| ---------------------------- | --------------- | ----------------------------------------------------------------------- |
+| C bridge (system primitives) | `netc_`         | `netc_socket`, `netc_recv`, `netc_sockopt`                              |
+| Public PL/I procedures       | `net_`          | `net_open`, `net_connect`, `net_read_until`                             |
+| Option codes                 | `NETOPT_*`      | `NETOPT_REUSEADDR`, `NETOPT_KEEPALIVE`, `NETOPT_NODELAY`                |
+| Status codes                 | `NET_ERR_*`     | `NET_ERR_EOF`, `NET_ERR_TIMEOUT`, `NET_ERR_OVERFLOW` (oncode sentinels) |
+| errno constants              | `E*`            | `EAGAIN`, `EBADF`, `ECONNREFUSED` (in `errno.inc`)                      |
+| POSIX mirror                 | as-is           | `AF_INET`, `SOCK_STREAM`, `SHUT_WR`, `POLLIN`                           |
+| Conditions                   | lowercase       | `net_error`, `net_timeout`, `net_eof`, `net_overflow`                   |
+| Internal helpers             | lowercase verbs | `raise_err`, `raise_timeout`, `raise_eof`, `raise_overflow`             |
 
-## Layout
+### Layout
 
-| Path | Contents |
-|---|---|
-| `source/c_bridge.c` | the ONLY C — thin syscall wrappers (`netc_*`) |
-| `source/net.pli` | the compiled PL/I module — client + server API, connection pool, error policy |
-| `include/net.inc` | interface include — constants + conditions + external `net_*` entries (`%include net;`) |
-| `include/type_defs.inc` | constants (`AF_*`, `SOCK_*`, `NET_*`), sizes |
-| `include/errno.inc` | POSIX errno as `%replace` named constants |
-| `include/c_bridge.inc` | by-value FFI declarations for the C bridge (module-only) |
-| `docs/api.md` | structured reference of every function (signature, returns, raises) |
-| `tests/c_bridge.c` | C regression test for the bridge bindings |
-| `examples/echo_server.pli` | echo server + client demo |
-| `examples/client.pli` | minimal TCP client |
-| `examples/resolve.pli` | DNS resolution demo |
-| `examples/fetch.pli` | fetch example.com via `net_read_all` (bounded auto-accumulation) |
-| `examples/fetch_dyn.pli` | fetch example.com with a manual `CONTROLLED` grow-loop |
-| `examples/http_client.pli` | fetch example.com via `net_read_all` (auto-growing buffer) |
-| `examples/test_read_all.pli`, `examples/test_resolve.pli` | scratch checks for `net_read_all` / `net_resolve` |
+| Path                                                      | Contents                                                                                |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `source/c_bridge.c`                                       | the ONLY C — thin syscall wrappers (`netc_*`)                                           |
+| `source/net.pli`                                          | the compiled PL/I module — client + server API, connection pool, error policy           |
+| `include/net.inc`                                         | interface include — constants + conditions + external `net_*` entries (`%include net;`) |
+| `include/type_defs.inc`                                   | constants (`AF_*`, `SOCK_*`, `NET_*`), sizes                                            |
+| `include/errno.inc`                                       | POSIX errno as `%replace` named constants                                               |
+| `include/c_bridge.inc`                                    | by-value FFI declarations for the C bridge (module-only)                                |
+| `docs/api.md`                                             | structured reference of every function (signature, returns, raises)                     |
+| `tests/c_bridge.c`                                        | C regression test for the bridge bindings                                               |
+| `examples/echo_server.pli`                                | echo server + client demo                                                               |
+| `examples/client.pli`                                     | minimal TCP client                                                                      |
+| `examples/resolve.pli`                                    | DNS resolution demo                                                                     |
+| `examples/fetch.pli`                                      | fetch example.com via `net_read_all` (bounded auto-accumulation)                        |
+| `examples/fetch_dyn.pli`                                  | fetch example.com with a manual `CONTROLLED` grow-loop                                  |
+| `examples/http_client.pli`                                | fetch example.com via `net_read_all` (auto-growing buffer)                              |
+| `examples/test_read_all.pli`, `examples/test_resolve.pli` | scratch checks for `net_read_all` / `net_resolve`                                       |
 
 ## Build
 
@@ -80,18 +100,15 @@ make test       # builds + runs the C bridge regression test
 make example    # trial-compiles every example against the interface include
 ```
 
-The library is a real linked module: `source/net.pli` is compiled once to
-`net.o` and archived into `libnet.a` beside the C bridge. A program pulls in
-only the **interface** (`%include net;`), then links:
+The library is a real linked module: `source/net.pli` is compiled once to `net.o` and archived into `libnet.a` beside the C bridge. A program pulls in only the **interface** (`%include net;`), then links:
 
 ```bash
 make build-prog SRC=examples/echo_server.pli OUT=echo_server
 ```
 
-`make test` (the C bridge) passes. `make all` builds the C bridge, then
-compiles `source/net.pli` — which uses `char(*)`, `CONTROLLED`, `BASED`
-views on parameters, based-member access, variable-length `SUBSTR`, and
-`dcl ... condition`. `make example` trial-compiles every example.
+`make test` (the C bridge) passes. `make all` builds the C bridge, then compiles `source/net.pli`.
+
+`make example` trial-compiles every example.
 
 ## API sketch
 
@@ -113,94 +130,46 @@ on condition(net_eof) begin; ... end;
 on condition(net_overflow) begin; ... end;
 ```
 
-## Bounded auto-accumulation
-
-`net_read_all` reads all data from a socket until EOF or error, accumulating into an internal `CONTROLLED` buffer that grows by doubling, then copying into the caller's `VARYING` buffer. Growth is automatic up to the buffer's `MAXLENGTH`; when `MAXLENGTH` is exhausted the bytes that fit are handed over and a `net_overflow` condition is raised:
-
-```pli
-dcl resp  char(NET_BUF_CAP) varying;     /* bounded accumulator */
-
-len = net_read_all(conn, resp);          /* auto-reads until EOF */
-put skip list('got', len, 'bytes');
-
-/* Overflow signals capacity exhausted before EOF.               */
-on condition(net_overflow) begin;
-  on condition(net_overflow) system;
-  put skip list('response too large');
-end;
-```
-
-This replaces the manual grow-loop pattern (see `examples/fetch_dyn.pli`):
-
-```pli
-/* Before (manual): allocate → free → realloc cycle inside loop */
-do while (^done);
-  got = net_read(conn, chunk, buflen);
-  ...
-  do while (total + got > cap);
-    cap = cap * 2;
-    allocate spare; spare = body; free body;
-    allocate body; body = spare; free spare;
-  end;
-  substr(body, total+1, got) = substr(chunk, 1, got);
-end;
-
-/* After (automatic): single call, bounded by buffer MAXLENGTH   */
-len = net_read_all(conn, resp);        /* auto-reads, bounded */
-```
-
-For responses that may exceed `NET_BUF_CAP`, see `examples/fetch_dyn.pli` which demonstrates explicit `CONTROLLED` allocation with manual grow-loops outside the library function.
-
 ## Production readiness
 
-The C bridge and PL/I layer cover the core of what a production socket client
-or single-client server needs:
+The C bridge and PL/I layer cover the core of what a production socket client or single-client server needs:
 
-- **socket options** — `net_setopt` (`NETOPT_REUSEADDR` / `KEEPALIVE` /
-  `NODELAY`) and `net_set_linger`; platform values live in C, not PL/I;
+- **socket options** — `net_setopt` (`NETOPT_REUSEADDR` / `KEEPALIVE` / `NODELAY`) and `net_set_linger`; platform values live in C, not PL/I;
 - **addresses** — `net_peer` (remote) and `net_local` (bound local addr/port);
 - **DNS** — `net_resolve` (host ↔ dotted quad), plus connect-time resolution;
-- **nonblocking connect** — `net_connect_nb` + `net_connect_finish`
-  (`EINPROGRESS` → poll writable → check `SO_ERROR`);
+- **nonblocking connect** — `net_connect_nb` + `net_connect_finish `(`EINPROGRESS` → poll writable → check `SO_ERROR`);
 - **UDP** — `net_sendto` / `net_recvfrom` datagram send/receive;
-- **errors** — conditions-only model (`net_error` / `net_timeout` / `net_eof` /
-  `net_overflow`), `net_strerror` (full errno text) and `net_errtext`; named
-  errno constants (`errno.inc`);
-- **buffer safety** — `net_read_all` accumulates into caller buffer up to its `MAXLENGTH`, raising `net_overflow` when exhausted mid-stream. `net_read_until` / `net_read` bound appends to the caller buffer (`maxlength`), so a long delimiter search cannot overrun.
+- **errors** — conditions-only model (`net_error` / `net_timeout` / `net_eof` / `net_overflow`), `net_strerror` (full errno text) and `net_errtext`; named errno constants (`errno.inc`).
 
 Still to add for a fully production-grade library (out of current scope):
 
-- **multi-client event loop** — a server must `select`/`poll` across many
-  connections; today only single-fd `net_poll` exists, and the CONTROLLED
-  LIFO pool makes many-outstanding-connections awkward;
-- **connect-timeout orchestration** — wiring `net_connect_nb` + a poll-with-
-  deadline into a single blocking `net_connect_to(h, host, port, ms)`;
+- **multi-client event loop** — a server must `select`/`poll` across many connections; today only single-fd `net_poll` exists, and the CONTROLLED LIFO pool makes many-outstanding-connections awkward;
+- **connect-timeout orchestration** — wiring `net_connect_nb` + a poll-with-deadline into a single blocking `net_connect_to(h, host, port, ms)`;
 - **TLS** (out of scope; pair libnet with OpenSSL at a higher layer);
-- **thread-safety** — the CONTROLLED pool is per-thread; cross-thread sharing
-  of a handle is not guarded.
+- **thread-safety** — the CONTROLLED pool is per-thread; cross-thread sharing of a handle is not guarded.
 
 ## Error model
 
-libnet reports **all** failures through conditions (the idiomatic PL/I
-mechanism), never through return codes. A returned value is **data only**: a
-byte count, a delimiter position, a readiness mask, or a pointer handle.
-A procedure that can fail raises one of these conditions, intercepted with
-`ON`; `oncode()` recovers the detail.
+`libnet` reports **all** failures through conditions (the idiomatic PL/I mechanism), never through return codes. A returned value is **data only**: a byte count, a delimiter position, a readiness mask, or a pointer handle.
+
+A procedure that can fail raises one of these conditions, intercepted with `ON`; `oncode()` recovers the detail.
 
 - `condition net_error` — hard error; `oncode()` = POSIX `errno`.
-- `condition net_timeout` — read/write timeout or `EAGAIN`/`EINTR`;
-  `oncode()` = `NET_ERR_TIMEOUT`.
+- `condition net_timeout` — read/write timeout or `EAGAIN`/`EINTR`;  
+`oncode()` = `NET_ERR_TIMEOUT`.
 - `condition net_eof` — peer closed / end of stream; `oncode()` = `NET_ERR_EOF`.
-- `condition net_overflow` — caller buffer filled mid-stream;
-  `oncode()` = `NET_ERR_OVERFLOW`.
+- `condition net_overflow` — caller buffer filled mid-stream;  
+`oncode()` = `NET_ERR_OVERFLOW`.
 
-Note `net_poll` does **not** raise `net_timeout` on a timeout — a poll timeout
-is the normal "nothing ready" result (returns 0).
+Use `net_errtext()` for human-readable error messages.
+
+Note `net_poll` does **not** raise `net_timeout` on a timeout — a poll timeout is the normal "nothing ready" result (returns 0).
 
 ## Status
 
-The library is a compiled module rather than `%include`d source.
-`make test` runs the `netc_*` bridge regression test (passing); `make all`
-builds the C bridge and the PL/I module; `make example` trial-compiles the
-examples. The deprecated original (Iron Spring `linux/386`) is preserved
-under `deprecated/`.
+The library is a compiled module rather than `%include`d source.  
+`make test` runs the `netc_*` bridge regression test (passing);
+
+`make all`builds the C bridge and the PL/I module;
+
+`make example` trial-compiles the examples.
