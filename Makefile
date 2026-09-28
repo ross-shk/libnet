@@ -58,8 +58,7 @@ $(DIST_INC): $(INC_SRCS)
 # Default output goes to $(BUILD)/, but OUT can override the full path.
 build-prog: libnet.a
 	@test -n "$(SRC)" || { echo "usage: make build-prog SRC=examples/foo.pli [OUT=foo]"; exit 1; }
-	@mkdir -p $(BUILD)
-	$(eval OUT_PATH := $(if $(OUT),$(OUT),$(BUILD)/$(basename $(notdir $(SRC)))))
+	$(eval OUT_PATH := $(if $(OUT),$(OUT),$(basename $(notdir $(SRC)))))
 	$(PLIC) $(PLIFLAGS) -c $(SRC) $(INC) -o $(OUT_PATH).o
 	$(CC) -o $(OUT_PATH) $(OUT_PATH).o libnet.a $(RTLIB)
 
