@@ -101,6 +101,44 @@
  end raise_overflow;
 
  /*---------------------------------------------------------------*/
+ /* Socket validation and error handling helpers                 */
+ /*---------------------------------------------------------------*/
+ /* Validate socket is open; raise net_error if invalid. */
+ validate_socket: procedure (fd);
+   dcl fd fixed bin(31);
+   if fd <= 0 then signal condition(net_error) set oncode(EBADF);
+ end validate_socket;
+
+ /* Check recv result; raise appropriate condition on error/EOF. */
+ check_recv: procedure (got, fd) returns (fixed bin(31));
+   dcl got fixed bin(31);
+   dcl fd  fixed bin(31);
+   if got = 0 then call raise_eof();
+   else if got < 0 then do;
+     if netc_errno() = EAGAIN then call raise_timeout();
+     else call raise_err();
+   end;
+   return (got);
+ end check_recv;
+
+ /* Check send result; raise appropriate condition on error. */
+ check_send: procedure (n, fd) returns (fixed bin(31));
+   dcl n  fixed bin(31);
+   dcl fd fixed bin(31);
+   if n < 0 then do;
+     if netc_errno() = EAGAIN then call raise_timeout();
+     else call raise_err();
+   end;
+   return (n);
+ end check_send;
+
+ /* Check C bridge call result; raise net_error on failure. */
+ check_rc: procedure (rc);
+   dcl rc fixed bin(31);
+   if rc < 0 then call raise_err();
+ end check_rc;
+
+ /*---------------------------------------------------------------*/
  /* net_open                                                     */
  /*---------------------------------------------------------------*/
  /* Allocate a connection (CONTROLLED push) and create a socket.  */
@@ -119,22 +157,24 @@
    dcl type   fixed bin(31);
    dcl proto  fixed bin(31);
    dcl h      pointer;
+   dcl fd     fixed bin(31);
 
+   /* Create socket first */
+   fd = netc_socket(family, type, proto);
+   if fd < 0 then do;
+     call raise_err();
+     return (null());
+   end;
+
+   /* Allocate and initialize connection record */
    allocate conn_rec;                /* implicit push - CONTROLLED */
-   conn_rec.fd            = 0;
+   conn_rec.fd            = fd;
    conn_rec.is_connected  = '0'b;
    conn_rec.read_timeout  = 0;
    conn_rec.write_timeout = 0;
    conn_rec.peer_ip       = '';
    conn_rec.peer_port     = 0;
    conn_rec.in_len        = 0;
-
-   conn_rec.fd = netc_socket(family, type, proto);
-   if conn_rec.fd < 0 then do;
-     call raise_err();
-     free conn_rec;
-     return (null());
-   end;
 
    h = addr(conn_rec);
    return (h);
@@ -157,10 +197,7 @@
    dcl rc   fixed bin(31);
 
    rc = netc_connect(c.fd, host, length(host), port);
-   if rc < 0 then do;
-     call raise_err();
-     return;
-   end;
+   call check_rc(rc);
    c.is_connected = '1'b;
    c.peer_port    = port;
  end net_connect;
@@ -197,6 +234,7 @@
  /*---------------------------------------------------------------*/
  /* net_close / net_shutdown                                     */
  /*---------------------------------------------------------------*/
+ /* Close connection and free controlled storage.                 */
  net_close: procedure (h);
    dcl h   pointer;
    dcl 1 c based(h) like conn_rec;
@@ -215,7 +253,7 @@
    dcl how fixed bin(31);
    dcl rc  fixed bin(31);
    rc = netc_shutdown(c.fd, how);
-   if rc < 0 then call raise_err();
+   call check_rc(rc);
  end net_shutdown;
 
  /*---------------------------------------------------------------*/
@@ -236,22 +274,11 @@
    dcl got    fixed bin(31);
    dcl tmp    char(NET_BUF_CAP);
 
-   if c.fd <= 0 then do;
-     signal condition(net_error) set oncode(EBADF);
-     return (0);
-   end;
+   call validate_socket(c.fd);
 
    got = netc_recv(c.fd, tmp, min(buflen, NET_BUF_CAP), 0);
-   if got = 0 then do;
-     call raise_eof();
-     return (0);
-   end;
-   if got < 0 then do;
-     if netc_errno() = EAGAIN then call raise_timeout();
-     else call raise_err();
-     return (0);
-   end;
-   buffer = substr(tmp, 1, got);
+   got = check_recv(got, c.fd);
+   if got > 0 then buffer = substr(tmp, 1, got);
    return (got);
  end net_read;
 
@@ -274,16 +301,9 @@
    dcl chunk_len fixed bin(31);
    dcl total_len fixed bin(31) init(0);
 
-   if c.fd <= 0 then do;
-     signal condition(net_error) set oncode(EBADF);
-     return (0);
-   end;
+   call validate_socket(c.fd);
 
-   /* TR25 rule 89: ALLOCATE controlled-item with dimension-attribute
-    *   controlled-allocate-item ::= [ integer ] identifier dimension-attribute
-    *                                    [ string-attribute ... ]
-    * Here: ALLOCATE buffer (cap) CHARACTER VARYING;
-    */
+   /* Allocate initial controlled buffer */
    allocate buffer (cap) character varying;
 
    /* Read in chunks, growing CONTROLLED string as needed */
@@ -356,6 +376,8 @@
    dcl cap    fixed bin(31);
    dcl done   bit(1);
 
+   call validate_socket(c.fd);
+
    total = length(buffer);
    done  = '0'b;
    do while (^done);
@@ -365,15 +387,9 @@
        return (0);
      end;
      got = netc_recv(c.fd, tmp, cap, 0);
-     if got = 0 then do;
-       call raise_eof();
-       return (0);
-     end;
-     if got < 0 then do;
-       if netc_errno() = EAGAIN then call raise_timeout();
-       else call raise_err();
-       return (0);
-     end;
+     got = check_recv(got, c.fd);
+     if got <= 0 then return (0);
+
      /* Append the new bytes after any content already in buffer */
      if total = 0 then buffer = substr(tmp, 1, got);
      else buffer = substr(buffer, 1, total) || substr(tmp, 1, got);
@@ -400,12 +416,7 @@
    dcl n      fixed bin(31);
 
    n = netc_send(c.fd, buffer, length(buffer), 0);
-   if n < 0 then do;
-     if netc_errno() = EAGAIN then call raise_timeout();
-     else call raise_err();
-     return (0);
-   end;
-   return (n);
+   return (check_send(n, c.fd));
  end net_write;
 
  net_send: procedure (h, buffer, flags) returns (fixed bin(31));
@@ -416,12 +427,7 @@
    dcl n      fixed bin(31);
 
    n = netc_send(c.fd, buffer, length(buffer), flags);
-   if n < 0 then do;
-     if netc_errno() = EAGAIN then call raise_timeout();
-     else call raise_err();
-     return (0);
-   end;
-   return (n);
+   return (check_send(n, c.fd));
  end net_send;
 
  /* Send the whole buffer, retrying on partial sends.                 */
@@ -454,8 +460,8 @@
      total = total + n;
    end; /* do while */
 
-   return (total);
- end net_send_all;
+    return (total);
+  end net_send_all;
 
  /* A single send() with optional flags; no retry.                    */
  /*                                                                   */
@@ -470,13 +476,7 @@
    dcl n      fixed bin(31);
 
    n = netc_send(c.fd, buffer, length(buffer), flags);
-   if n < 0 then do;
-     if netc_errno() = EAGAIN then call raise_timeout();
-     else call raise_err();
-     return (0);
-   end;
-
-   return (n);
+   return (check_send(n, c.fd));
  end net_send_once;
 
  /*-------------------------------------------------------------------*/
@@ -497,8 +497,7 @@
    dcl r      fixed bin(31);
 
    r = netc_poll(c.fd, events, ms);
-   if r < 0 then call raise_err();
-
+   call check_rc(r);
    return (r);
  end net_poll;
 
@@ -512,10 +511,7 @@
    dcl rc  fixed bin(31);
 
    rc = netc_settimeout(c.fd, rto, wto);
-   if rc < 0 then do;
-     call raise_err();
-     return;
-   end;
+   call check_rc(rc);
 
    c.read_timeout  = rto;
    c.write_timeout = wto;
@@ -532,7 +528,7 @@
    if on then rc = netc_setnonblock(c.fd, 1);
    else       rc = netc_setnonblock(c.fd, 0);
 
-   if rc < 0 then call raise_err();
+   call check_rc(rc);
  end net_set_nonblocking;
 
  /*-------------------------------------------------------------------*/
@@ -549,7 +545,7 @@
    dcl rc    fixed bin(31);
 
    rc = netc_sockopt(c.fd, opt, value);
-   if rc < 0 then call raise_err();
+   call check_rc(rc);
  end net_setopt;
 
  /* SO_LINGER: enable/disable with a timeout in seconds.              */
@@ -562,8 +558,7 @@
    dcl rc      fixed bin(31);
 
    rc = netc_setlinger(c.fd, on, seconds);
-
-   if rc < 0 then call raise_err();
+   call check_rc(rc);
  end net_set_linger;
 
  /*-------------------------------------------------------------------*/
@@ -580,8 +575,8 @@
    dcl tmp  char(16);
 
    rc = netc_getpeername(c.fd, tmp, 16, addr(port));
-   if rc < 0 then call raise_err();
-   else ip = trim(tmp);
+   call check_rc(rc);
+   ip = trim(tmp);
  end net_peer;
 
  /* Fill ip/port with the local (bound) address.                      */
@@ -595,8 +590,8 @@
    dcl tmp  char(16);
 
    rc = netc_getsockname(c.fd, tmp, 16, addr(port));
-   if rc < 0 then call raise_err();
-   else ip = trim(tmp);
+   call check_rc(rc);
+   ip = trim(tmp);
  end net_local;
 
  /*-------------------------------------------------------------------*/
@@ -612,8 +607,8 @@
    dcl tmp  char(16);
 
    rc = netc_resolve(host, length(host), tmp, 16);
-   if rc < 0 then call raise_err();
-   else ip = trim(tmp);
+   call check_rc(rc);
+   ip = trim(tmp);
  end net_resolve;
 
  /*-------------------------------------------------------------------*/
@@ -671,10 +666,7 @@
 
    e = 0;
    rc = netc_getsockerr(c.fd, addr(e));
-   if rc < 0 then do;
-     call raise_err();
-     return;
-   end;
+   call check_rc(rc);
 
    if e ^= 0 then do;
      signal condition(net_error) set oncode(e);
@@ -703,13 +695,7 @@
 
    n = netc_sendto(c.fd, buffer, length(buffer), 0,
                    ip, length(ip), port);
-   if n < 0 then do;
-     if netc_errno() = EAGAIN then call raise_timeout();
-     else call raise_err();
-     return (0);
-   end;
-
-   return (n);
+   return (check_send(n, c.fd));
  end net_sendto;
 
  /* Receive a datagram; the sender's address is returned in ip/port.  */
