@@ -261,22 +261,21 @@
  /*---------------------------------------------------------------*/
  /* Read up to buflen bytes into buffer.                          */
  /*                                                                   */
- /* Returns:  the number of bytes read (0 <= n <= buflen).            */
+ /* Returns:  the number of bytes read (0 <= n <= buffer capacity).   */
  /*                                                                   */
  /* Raises:   condition(net_eof) if the peer closed the stream;       */
  /*           condition(net_timeout) on timeout/EAGAIN;               */
  /*           condition(net_error) on a hard error.                   */
- net_read: procedure (h, buffer, buflen) returns (fixed bin(31));
+ net_read: procedure (h, buffer) returns (fixed bin(31));
    dcl h      pointer;
    dcl 1 c    based(h) like conn_rec;
    dcl buffer char(NET_BUF_CAP) varying;
-   dcl buflen fixed bin(31);
    dcl got    fixed bin(31);
    dcl tmp    char(NET_BUF_CAP);
 
    call validate_socket(c.fd);
 
-   got = netc_recv(c.fd, tmp, min(buflen, NET_BUF_CAP), 0);
+   got = netc_recv(c.fd, tmp, NET_BUF_CAP, 0);
    got = check_recv(got, c.fd);
    if got > 0 then buffer = substr(tmp, 1, got);
    return (got);
@@ -306,9 +305,9 @@
    /* Allocate initial controlled buffer */
    allocate buffer (cap) character varying;
 
-   /* Read in chunks using net_read, growing CONTROLLED string as needed */
+ /* Read in chunks using net_read, growing string as needed */
    do while ('1'b);
-     chunk_len = net_read(conn, chunk, NET_BUF_CAP);
+     chunk_len = net_read(conn, chunk);
      if chunk_len = 0 then leave;  /* EOF */
 
      /* Grow: ALLOCATE pushes a fresh generation, so copy buffer
@@ -435,7 +434,7 @@
    dcl total  fixed bin(31);
    dcl want   fixed bin(31);
    dcl n      fixed bin(31);
-   dcl chunk  char(NET_BUF_CAP);
+   dcl chunk  char(NET_BUF_CAP) varying;
    dcl take   fixed bin(31);
 
    total = 0;
