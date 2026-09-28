@@ -279,40 +279,40 @@
  end net_read;
 
 /* Read everything from conn into buffer, growing an internal
-        CONTROLLED buffer as needed, then copy to caller's buffer.
-        conn : open connection
-        buffer : caller's buffer (max NET_BUF_CAP bytes)
-        cap  : in/out - initial/final allocation size for internal buffer
-        Returns the number of bytes read.
-        Raises net_overflow if data exceeds NET_BUF_CAP. */
-     net_read_all: procedure (conn, buffer, cap) returns (fixed bin(31));
-       dcl conn    pointer;
-       dcl hp      pointer;
-       dcl 1 c     based(hp) like conn_rec;
-       dcl buffer  char(NET_BUF_CAP) varying;
-       dcl cap     fixed bin(31);
+         CONTROLLED buffer as needed, then copy to caller's buffer.
+         conn : open connection
+         buffer : caller's buffer (max NET_BUF_CAP bytes)
+         Returns the number of bytes read.
+         Raises net_overflow if data exceeds NET_BUF_CAP. */
+ net_read_all: procedure (conn, buffer) returns (fixed bin(31));
+   dcl conn    pointer;
+   dcl hp      pointer;
+   dcl 1 c     based(hp) like conn_rec;
+   dcl buffer  char(NET_BUF_CAP) varying;
+        dcl cap     fixed bin(31) init(1024);
 
 dcl internal_buff char(*) varying controlled;
         dcl spare   char(*) varying controlled;
-        dcl chunk   char(NET_BUF_CAP);        /* FIXED: non-varying for C recv */
+        dcl chunk   char(NET_BUF_CAP);        /* FIXED: non-varying for
+        C recv */
         dcl chunk_len fixed bin(31);
         dcl total_len fixed bin(31) init(0);
-        dcl orig_cap  fixed bin(31);
 
-       hp = conn;
-       if c.fd <= 0 then do;
-          signal condition(net_error) set oncode(EBADF);
-          return (0);
-       end;
+hp = conn;
+        if c.fd <= 0 then do;
+           signal condition(net_error) set oncode(EBADF);
+           return (0);
+        end;
 
-       orig_cap = cap;
+        /* Save initial capacity for trim comparison */
+        dcl init_cap fixed bin(31) init(64);
 
-       /* TR25 rule 89: ALLOCATE controlled-item with dimension-attribute
-        *   controlled-allocate-item ::= [ integer ] identifier dimension-attribute
-        *                                    [ string-attribute ... ]
-        * Here: ALLOCATE internal_buff (cap) CHARACTER VARYING;
-        */
-       allocate internal_buff (cap) character varying;
+        /* TR25 rule 89: ALLOCATE controlled-item with dimension-attribute
+         *   controlled-allocate-item ::= [ integer ] identifier dimension-attribute
+         *                                    [ string-attribute ... ]
+         * Here: ALLOCATE internal_buff (cap) CHARACTER VARYING;
+         */
+        allocate internal_buff (cap) character varying;
 
        /* Read in chunks, growing CONTROLLED string as needed */
        do while ('1'b);
@@ -347,7 +347,7 @@ dcl internal_buff char(*) varying controlled;
        end;
 
 /* Trim internal buffer to actual length if we overallocated */
-        if total_len < orig_cap then do;
+        if total_len < init_cap then do;
           if total_len > 0 then do;
             allocate spare (total_len) character varying;
             spare = internal_buff;

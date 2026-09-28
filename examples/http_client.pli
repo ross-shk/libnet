@@ -11,7 +11,6 @@
   %include net;
 
     dcl conn           pointer;
-    dcl requested_len  fixed bin(31);
     dcl sent           fixed bin(31);
     dcl req            char(56);
     dcl resp           char(NET_BUF_CAP) varying;   /* fixed max, varies in length */
@@ -48,12 +47,9 @@
     sent = net_send_all(conn, req);
     put skip list('sent', sent, 'request bytes');
 
-    /* Estimate initial allocation for net_read_all internal buffer */
-    requested_len = 64;
-
     /* Single call: net_read_all reads until EOF, growing internal
        controlled buffer automatically, then copies to resp.        */
-    total_len = net_read_all(conn, resp, requested_len);
+    total_len = net_read_all(conn, resp);
 
     put skip list('fetched', total_len, 'bytes from example.com');
     if total_len > 0 then
