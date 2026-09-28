@@ -17,13 +17,8 @@
 
    /* ON units: re-arm so failure inside does not recurse. */
    on condition(net_error) begin;
-     on condition(net_error) system;
      put skip list('error:', net_errtext());
      stop;
-   end;
-   on condition(net_eof) begin;
-     on condition(net_eof) system;
-     /* Fall through: net_read_all returns 0 on EOF. */
    end;
 
    /* Open connection with timeouts and connect. */
@@ -45,7 +40,7 @@
    /* Report fetched byte count and response text. */
    put skip list('fetched', total_len, 'bytes from example.com');
    if total_len > 0 then
-     put skip list(substr(resp, 1, total_len));
+     put skip list(resp);
 
    /* Close connection. */
    call net_close(conn);
