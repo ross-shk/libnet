@@ -1,4 +1,4 @@
- /* http_client.pli - HTTP client using net_read_all (auto-growing buffer).
+/* http_client.pli - HTTP client using net_read_all (auto-growing buffer).
 
     Module:    http_client
     Purpose:   Connect to example.com:80, send HTTP/1.0 GET /,
@@ -10,12 +10,12 @@
  http_client: procedure options(main);
   %include net;
 
-    dcl conn       pointer;
-    dcl len        fixed bin(31);      /* total bytes read */
-    dcl sent       fixed bin(31);
-    dcl req        char(56);
-    dcl resp       char(NET_BUF_CAP) varying;
-    dcl init_cap   fixed bin(31) init(64);
+    dcl conn           pointer;
+    dcl requested_len  fixed bin(31);
+    dcl sent           fixed bin(31);
+    dcl req            char(56);
+    dcl resp           char(NET_BUF_CAP) varying;   /* fixed max, varies in length */
+    dcl total_len      fixed bin(31) init(0);
 
     on condition(net_error) begin;
       on condition(net_error) system;
@@ -34,6 +34,7 @@
     end; /* on condition(net_overflow) */
     on condition(net_eof) begin;
       on condition(net_eof) system;
+      /* fall through: net_read_all handles EOF internally */
     end; /* on condition(net_eof) */
 
     conn = net_open(AF_INET, SOCK_STREAM, 0);
@@ -41,24 +42,22 @@
     call net_set_timeout(conn, 10000, 10000);
     call net_connect(conn, 'example.com', 80);
 
+    /* HTTP/1.0 GET request with Connection: close */
     req = 'GET / HTTP/1.0' || '0D0A'x || 'Host: example.com' || '0D0A'x
        || 'Connection: close' || '0D0A'x || '0D0A'x;
     sent = net_send_all(conn, req);
     put skip list('sent', sent, 'request bytes');
 
-    /* Single call: net_read_all reads until EOF or overflow.
-       Buffer grows automatically via implicit realloc — no manual
-       ALLOCATE/FREE needed inside net_read_all.                */
-    len = net_read_all(conn, resp, init_cap);
+    /* Estimate initial allocation for net_read_all internal buffer */
+    requested_len = 64;
 
-    put skip list('received', len, 'bytes from example.com');
-    if len > 0 then do;
-       put skip list('--- response start ---');
-       put skip list(substr(resp, 1, min(len, 400)));
-       if len > 400 then
-         put skip list('...' , (len - 400) , ' more bytes');
-       put skip list('--- response end ---');
-    end;
+    /* Single call: net_read_all reads until EOF, growing internal
+       controlled buffer automatically, then copies to resp.        */
+    total_len = net_read_all(conn, resp, requested_len);
+
+    put skip list('fetched', total_len, 'bytes from example.com');
+    if total_len > 0 then
+      put skip list(substr(resp, 1, total_len));
 
     call net_close(conn);
     put skip list('done');

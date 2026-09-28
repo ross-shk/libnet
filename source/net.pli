@@ -292,12 +292,12 @@
        dcl buffer  char(NET_BUF_CAP) varying;
        dcl cap     fixed bin(31);
 
-       dcl internal_buff char(*) varying controlled;
-       dcl spare   char(*) varying controlled;
-       dcl chunk   char(NET_BUF_CAP) varying;
-       dcl chunk_len fixed bin(31);
-       dcl total_len fixed bin(31) init(0);
-       dcl orig_cap  fixed bin(31);
+dcl internal_buff char(*) varying controlled;
+        dcl spare   char(*) varying controlled;
+        dcl chunk   char(NET_BUF_CAP);        /* FIXED: non-varying for C recv */
+        dcl chunk_len fixed bin(31);
+        dcl total_len fixed bin(31) init(0);
+        dcl orig_cap  fixed bin(31);
 
        hp = conn;
        if c.fd <= 0 then do;
@@ -346,28 +346,30 @@
          total_len = total_len + chunk_len;
        end;
 
-       /* Trim internal buffer to actual length if we overallocated */
-       if total_len < orig_cap then do;
-         if total_len > 0 then do;
-           allocate spare (total_len) character varying;
-           spare = internal_buff;
-           free internal_buff;
-           allocate internal_buff (total_len) character varying;
-           internal_buff = spare;
-           free spare;
-         end;
-       end;
+/* Trim internal buffer to actual length if we overallocated */
+        if total_len < orig_cap then do;
+          if total_len > 0 then do;
+            allocate spare (total_len) character varying;
+            spare = internal_buff;
+            free internal_buff;
+            allocate internal_buff (total_len) character varying;
+            internal_buff = spare;
+            free spare;
+          end;
+        end;
 
-       /* Copy to caller's buffer, check for overflow */
-       if total_len > NET_BUF_CAP then do;
-         free internal_buff;
-         call raise_overflow();
-         return (NET_BUF_CAP);
-       end;
+        /* Copy to caller's buffer, check for overflow */
+        if total_len > NET_BUF_CAP then do;
+          free internal_buff;
+          call raise_overflow();
+          return (NET_BUF_CAP);
+        end;
 
-       buffer = internal_buff;
-       free internal_buff;
-       return (total_len);
+        /* Use SUBSTR assignment to copy content (direct assignment
+           may not copy data correctly for controlled varying source) */
+        substr(buffer, 1, total_len) = substr(internal_buff, 1, total_len);
+        free internal_buff;
+        return (total_len);
      end net_read_all;
 
  /* Read until a delimiter character is seen, appending               */
