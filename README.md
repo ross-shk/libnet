@@ -100,7 +100,7 @@ make test       # builds + runs the C bridge regression test
 make example    # trial-compiles every example against the interface include
 ```
 
-The library is a real linked module: `source/net.pli` is compiled once to `net.o` and archived into `libnet.a` beside the C bridge. A program pulls in only the **interface** (`%include net;`), then links:
+The library is a real linked module: `source/net.pli` is compiled once to `net.o` and archived into `libnet.a` beside the C bridge. A program pulls in only the **interface** (`%include net;`), then `build-prog` compiles it and links `-lnet + libpli.a` in a single `plic` invocation:
 
 ```bash
 make build-prog SRC=examples/echo_server.pli OUT=echo_server
@@ -108,7 +108,7 @@ make build-prog SRC=examples/echo_server.pli OUT=echo_server
 
 `make test` (the C bridge) passes. `make all` builds the C bridge, then compiles `source/net.pli`.
 
-`make example` trial-compiles every example.
+`make example` trial-compiles every example (compile-only).
 
 ## API sketch
 
