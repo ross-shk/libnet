@@ -20,9 +20,6 @@
      put skip list('error:', net_errtext());
      stop;
    end;
-   on condition(net_eof) begin;
-     /* EOF is normal end of stream for HTTP/1.0 with Connection: close */
-   end;
 
    /* Open connection with timeouts and connect. */
    conn = net_open(AF_INET, SOCK_STREAM, 0);

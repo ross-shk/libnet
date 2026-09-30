@@ -15,22 +15,23 @@
  /* connection logic no longer %included inline into each */
  /* program. */
  /* */
- /* Error handling (conditions-only - the idiomatic PL/I mechanism): */
- /*   libnet reports ALL failures via conditions, never return codes.*/
- /*   A returned value is DATA only. A procedure that can fail raises */
- /*   one of: */
- /* */
- /*       condition(net_error)    hard error; oncode() = errno */
- /*       condition(net_timeout)  timeout / EAGAIN;    oncode() = */
- /*                           NET_ERR_TIMEOUT */
- /*       condition(net_eof)      peer closed;         oncode() = */
- /*                           NET_ERR_EOF */
- /*       condition(net_overflow) caller buffer full;  oncode() = */
- /*                           NET_ERR_OVERFLOW */
- /* */
- /* The conditions and NET_ERR_* sentinels are exported so caller */
- /* ON-units reference them (see include/net.inc, which redeclares */
- /* them for the caller's scope). */
+/* Error handling (conditions-only - the idiomatic PL/I mechanism): */
+  /*   libnet reports ALL failures via conditions, never return codes.*/
+  /*   A returned value is DATA only. A procedure that can fail raises */
+  /*   one of: */
+  /* */
+  /*       condition(net_error)     hard error; oncode() = errno */
+  /*       condition(net_timeout)   timeout / EAGAIN;    oncode() = */
+  /*                           NET_ERR_TIMEOUT */
+  /*       condition(net_overflow)  caller buffer full;  oncode() = */
+  /*                           NET_ERR_OVERFLOW */
+  /* */
+  /* Normal end-of-stream (peer closed) returns 0 from read calls */
+  /* without signaling; callers check return value for EOF. */
+  /* */
+  /* The conditions and NET_ERR_* sentinels are exported so caller */
+  /* ON-units reference them (see include/net.inc, which redeclares */
+  /* them for the caller's scope). */
 
 net: package exports(net_open, net_connect, net_dial, net_close,
    net_shutdown, net_read, net_read_all, net_read_until, net_write,
@@ -106,10 +107,11 @@ net: package exports(net_open, net_connect, net_dial, net_close,
    signal condition(net_timeout) set oncode(NET_ERR_TIMEOUT);
  end raise_timeout;
 
- /* Raise net_eof (peer closed / end of stream). */
- raise_eof: procedure;
-   signal condition(net_eof) set oncode(NET_ERR_EOF);
- end raise_eof;
+/* Raise net_eof (explicit end-of-stream signal; not used for normal
+     read EOF which returns 0). */
+  raise_eof: procedure;
+    signal condition(net_eof) set oncode(NET_ERR_EOF);
+  end raise_eof;
 
  /* Raise net_overflow (caller buffer exhausted mid-stream). */
  raise_overflow: procedure;
@@ -125,17 +127,17 @@ net: package exports(net_open, net_connect, net_dial, net_close,
    if fd <= 0 then signal condition(net_error) set oncode(EBADF);
  end validate_socket;
 
- /* Check recv result; raise appropriate condition on error/EOF. */
- check_recv: procedure (got, fd) returns (fixed bin(31));
-   dcl got fixed bin(31);
-   dcl fd  fixed bin(31);
-   if got = 0 then call raise_eof();
-   else if got < 0 then do;
-     if netc_errno() = EAGAIN then call raise_timeout();
-     else call raise_err();
-   end;
-   return (got);
- end check_recv;
+/* Check recv result; raise appropriate condition on error.
+     Normal EOF (got = 0) is returned as-is without signaling.   */
+  check_recv: procedure (got, fd) returns (fixed bin(31));
+    dcl got fixed bin(31);
+    dcl fd  fixed bin(31);
+    if got < 0 then do;
+      if netc_errno() = EAGAIN then call raise_timeout();
+      else call raise_err();
+    end;
+    return (got);
+  end check_recv;
 
  /* Check send result; raise appropriate condition on error. */
  check_send: procedure (n, fd) returns (fixed bin(31));
@@ -272,17 +274,17 @@ net: package exports(net_open, net_connect, net_dial, net_close,
    call check_rc(rc);
  end net_shutdown;
 
- /*---------------------------------------------------------------*/
- /* net_read family                                              */
- /*---------------------------------------------------------------*/
- /* Read up to buflen bytes into buffer.                          */
- /*                                                                   */
- /* Returns:  the number of bytes read (0 <= n <= buffer capacity).   */
- /*                                                                   */
- /* Raises:   condition(net_eof) if the peer closed the stream;       */
- /*           condition(net_timeout) on timeout/EAGAIN;               */
- /*           condition(net_error) on a hard error.                   */
- net_read: procedure (h, buffer) returns (fixed bin(31));
+/*---------------------------------------------------------------*/
+  /* net_read family                                              */
+  /*---------------------------------------------------------------*/
+  /* Read up to buflen bytes into buffer.                          */
+  /*                                                                   */
+  /* Returns:  the number of bytes read (0 = peer closed,           */
+  /*           >0 = bytes read).                                   */
+  /*                                                                   */
+  /* Raises:   condition(net_timeout) on timeout/EAGAIN;             */
+  /*           condition(net_error) on a hard error.                 */
+  net_read: procedure (h, buffer) returns (fixed bin(31));
    dcl h      pointer;
    dcl 1 c    based(h) like conn_rec;
    dcl buffer char(NET_BUF_CAP) varying;
@@ -297,15 +299,14 @@ net: package exports(net_open, net_connect, net_dial, net_close,
    return (got);
  end net_read;
 
- /* Read everything from conn into a dynamically allocated CONTROLLED
-    buffer. The caller provides a char(*) varying controlled variable
-    which this procedure allocates and grows as needed. No fixed size
-    limit - response can be truly arbitrary length.
-    conn   : open connection
-    buffer : caller's controlled buffer (allocated by this procedure)
-    Returns the number of bytes read.
-    Raises net_error on hard error, net_timeout on EAGAIN, net_eof on
-    peer close. */
+/* Read everything from conn into a dynamically allocated CONTROLLED
+     buffer. The caller provides a char(*) varying controlled variable
+     which this procedure allocates and grows as needed. No fixed size
+     limit - response can be truly arbitrary length.
+     conn   : open connection
+     buffer : caller's controlled buffer (allocated by this procedure)
+     Returns the number of bytes read (0 = peer closed).
+     Raises net_error on hard error, net_timeout on EAGAIN. */
  net_read_all: procedure (conn, buffer) returns (fixed bin(31));
    dcl conn    pointer;
    dcl 1 c     based(conn) like conn_rec;
@@ -364,15 +365,15 @@ net: package exports(net_open, net_connect, net_dial, net_close,
    return (total_len);
  end net_read_all;
 
- /* Read until a delimiter character is seen, appending               */
- /* received bytes to buffer.                                         */
- /*                                                                   */
- /* Returns:  the position of the first delimiter in buffer (1..len). */
- /*                                                                   */
- /* Raises:   condition(net_eof) if peer closed before delimiter;     */
- /*           condition(net_timeout), condition(net_error), or        */
- /*           condition(net_overflow) if the caller buffer filled.    */
- net_read_until: procedure (h, buffer, delim) returns (fixed bin(31));
+/* Read until a delimiter character is seen, appending               */
+  /* received bytes to buffer.                                         */
+  /*                                                                   */
+  /* Returns:  the position of the first delimiter in buffer (1..len). */
+  /*           Returns 0 if peer closed before delimiter (EOF).        */
+  /*                                                                   */
+  /* Raises:   condition(net_timeout), condition(net_error), or        */
+  /*           condition(net_overflow) if the caller buffer filled.    */
+  net_read_until: procedure (h, buffer, delim) returns (fixed bin(31));
    dcl h      pointer;
    dcl 1 c    based(h) like conn_rec;
    dcl buffer char(NET_BUF_CAP) varying;
