@@ -1,10 +1,10 @@
  /* errno.inc - POSIX errno constants as %replace. Named constants keep
-  * libnet's error handling readable and match the values returned
-  * by the C bridge's cached errno.
-  *
-  * Only the subset relevant to sockets is defined here; add more
-  * as needed.
-  */
+ * libnet's error handling readable and match the values returned
+ * by the C bridge's cached errno.
+ *
+ * Only the subset relevant to sockets is defined here; add more
+ * as needed.
+ */
 
  %replace EPERM        by   1;  /* Operation not permitted        */
  %replace ENOENT       by   2;  /* No such file or directory      */
@@ -17,6 +17,7 @@
  %replace EFAULT       by  14;  /* Bad address                    */
  %replace EINVAL       by  22;  /* Invalid argument               */
  %replace EPIPE        by  32;  /* Broken pipe                    */
+ %replace EMFILE       by  24;  /* Too many open files            */
  %replace ENOTSOCK     by  88;  /* Socket operation on non-socket */
  %replace EMSGSIZE     by  90;  /* Message too long               */
  %replace EADDRINUSE   by  98;  /* Address already in use         */

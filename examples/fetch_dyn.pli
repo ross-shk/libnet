@@ -70,7 +70,7 @@
 
    /* Read in chunks, growing CONTROLLED string as needed */
    do while ('1'b);
-     chunk_len = net_read(conn, chunk, NET_BUF_CAP);
+     chunk_len = net_read(conn, chunk);
      if chunk_len = 0 then leave;  /* EOF */
 
        /* Grow: ALLOCATE pushes a fresh generation, so copy body

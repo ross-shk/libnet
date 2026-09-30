@@ -32,13 +32,14 @@
  /* ON-units reference them (see include/net.inc, which redeclares */
  /* them for the caller's scope). */
 
- net: package exports(net_open, net_connect, net_dial, net_close,
-    net_shutdown, net_read, net_read_all, net_read_until, net_write,
-    net_send, net_send_all, net_send_once, net_sendto, net_recvfrom,
-    net_poll, net_set_timeout, net_set_nonblocking, net_setopt,
-    net_set_linger, net_peer, net_local, net_resolve, net_strerror,
-    net_connect_nb, net_connect_finish, net_listen, net_accept,
-    net_errtext);
+net: package exports(net_open, net_connect, net_dial, net_close,
+   net_shutdown, net_read, net_read_all, net_read_until, net_write,
+   net_send, net_send_all, net_send_once, net_sendto, net_recvfrom,
+   net_poll, net_poll_multi, net_set_timeout, net_set_nonblocking, net_setopt,
+   net_set_linger, net_peer, net_local, net_resolve, net_strerror,
+   net_connect_nb, net_connect_finish, net_listen, net_accept,
+   net_server_add_client, net_errtext,
+   net_server_nclients, net_server_client, net_server_remove_client);
 
  /*---------------------------------------------------------------*/
  /* Shared constants (self-contained; the module compiles its own */
@@ -63,7 +64,7 @@
  /* accepted client share the same layout. Callers hold only a    */
  /* POINTER handle; each procedure declares a BASED view directly */
  /* on its handle parameter, so no base-pointer copy is needed.  */
- dcl 1 conn_rec controlled aligned,
+ dcl 1 conn_rec controlled unaligned,
     2 fd               fixed bin(31),
     2 is_connected     bit(1),
     2 read_timeout     fixed bin(31),   /* ms; 0 = blocking */
@@ -72,6 +73,21 @@
     2 peer_port        fixed bin(31),
     2 inbuf            char(NET_BUF_CAP),
     2 in_len           fixed bin(31);   /* bytes currently buffered */
+
+ /* Server record with connection pool for multi-client event loop. */
+ /* The server's CONTROLLED record includes a fixed array of client */
+ /* handles (pointers to conn_rec). NET_MAX_CLIENTS is the max.    */
+ dcl 1 server_rec controlled unaligned,
+    2 fd               fixed bin(31),
+    2 is_connected     bit(1),
+    2 read_timeout     fixed bin(31),
+    2 write_timeout    fixed bin(31),
+    2 peer_ip          char(16),
+    2 peer_port        fixed bin(31),
+    2 inbuf            char(NET_BUF_CAP),
+    2 in_len           fixed bin(31),
+    2 n_clients        fixed bin(31),
+    2 client_handles   (NET_MAX_CLIENTS) pointer;
 
  /*---------------------------------------------------------------*/
  /* Internal error helpers (raise conditions - the only error    */
@@ -446,8 +462,8 @@
      total = total + n;
    end; /* do while */
 
-    return (total);
-  end net_send_all;
+   return (total);
+ end net_send_all;
 
  /* A single send() with optional flags; no retry.                    */
  /*                                                                   */
@@ -486,6 +502,57 @@
    call check_rc(r);
    return (r);
  end net_poll;
+
+ /* Multi-fd poll across a server's connection pool.                  */
+ /*                                                                   */
+ /* server   - server handle (from net_listen)                        */
+ /* events   - array of event masks to watch per fd (extent           */
+ /*            n_clients+1). Index 1 is the server socket, indices    */
+ /*            2..n_clients+1 are the pool entries.                   */
+ /*            (POLLIN=1, POLLOUT=2). Caller allocates as             */
+ /*            fixed bin(31) controlled with dimension n_clients+1.   */
+ /* revents  - array of returned event masks (same codes + 4=error)   */
+ /* ms       - timeout in milliseconds (-1 = infinite)                */
+ /*                                                                   */
+ /* Returns:  the number of ready fds, or 0 on timeout.               */
+ /*           On error raises condition(net_error).                   */
+ /*                                                                   */
+ /* The server's client pool is used; events/revents arrays must have */
+ /* at least s.n_clients+1 elements. Index 1 = server socket,         */
+ /* indices 2..n_clients+1 = the pool entries.                        */
+ net_poll_multi: procedure (server, events, revents, ms)
+     returns (fixed bin(31));
+   dcl server  pointer;
+   dcl events  fixed bin(31) controlled;
+   dcl revents fixed bin(31) controlled;
+   dcl ms      fixed bin(31);
+   dcl 1 s     based(server) like server_rec;
+   dcl fds     fixed bin(31) controlled;
+   dcl r       fixed bin(31);
+   dcl i       fixed bin(31);
+   dcl n       fixed bin(31);
+   dcl 1 c     based like conn_rec;
+
+   n = s.n_clients + 1;  /* +1 for server socket */
+   if s.n_clients <= 0 then return (0);
+
+   allocate fds (n);
+   /* Index 1 = server socket */
+   fds(1) = s.fd;
+   /* Indices 2..n_clients+1 = client connections */
+   do i = 1 to s.n_clients;
+     fds(i + 1) = s.client_handles(i) -> c.fd;
+   end;
+
+   r = netc_poll_multi(addr(fds(1)), addr(events(1)),
+                       addr(revents(1)), n, ms);
+
+   free fds;
+
+   if r < 0 then call raise_err();
+
+   return (r);
+ end net_poll_multi;
 
  /* Set read/write timeouts (ms; 0 = blocking).                       */
  /* Raises:   condition(net_error) on failure.                        */
@@ -743,24 +810,65 @@
      return (null());
    end;
 
+   /* Make server socket non-blocking for use with poll() */
+   call netc_setnonblock(fd, 1);
+
+   allocate server_rec;
+   server_rec.fd            = fd;
+   server_rec.is_connected  = '1'b;
+   server_rec.read_timeout  = 0;
+   server_rec.write_timeout = 0;
+   server_rec.peer_ip       = '';
+   server_rec.peer_port     = 0;
+   server_rec.in_len        = 0;
+   server_rec.n_clients     = 0;
+   h = addr(server_rec);
+
+   return (h);
+ end net_listen;
+
+ /* Add a client connection to the server's pool.
+  * Returns the client handle in `client`.
+  * Raises: condition(net_error) if pool is full. */
+ net_server_add_client: procedure (server, client);
+   dcl server pointer;
+   dcl client pointer;
+   dcl 1 s    based(server) like server_rec;
+   dcl cfd    fixed bin(31);
+
+   cfd = netc_accept(s.fd);
+   if cfd < 0 then do;
+     call raise_err();
+     return;
+   end;
+
+   if s.n_clients >= NET_MAX_CLIENTS then do;
+     call netc_close(cfd);
+     signal condition(net_error) set oncode(EMFILE);
+     return;
+   end;
+
    allocate conn_rec;
-   conn_rec.fd            = fd;
+   conn_rec.fd            = cfd;
    conn_rec.is_connected  = '1'b;
    conn_rec.read_timeout  = 0;
    conn_rec.write_timeout = 0;
    conn_rec.peer_ip       = '';
    conn_rec.peer_port     = 0;
    conn_rec.in_len        = 0;
-   h = addr(conn_rec);
+   client = addr(conn_rec);
 
-   return (h);
- end net_listen;
+   s.n_clients = s.n_clients + 1;
+   s.client_handles(s.n_clients) = client;
+ end net_server_add_client;
 
  /* Accept one connection on the server handle. Allocates a client    */
  /* connection and sets its handle in `client`.                       */
  /*                                                                   */
  /* Raises:   condition(net_error) on a failed accept; `client` is    */
  /*           left unset.                                             */
+ /* Note: This is the legacy single-client accept. For multi-client, */
+ /* use net_server_add_client.                                        */
  net_accept: procedure (server, client);
    dcl server pointer;
    dcl client pointer;
@@ -812,6 +920,39 @@
      when (e = ENETUNREACH)   return ('network unreachable');
      otherwise                return ('errno ' || char(e));
    end; /* select */
- end net_errtext;
+end net_errtext;
 
- end net;
+  /*-------------------------------------------------------------------*/
+  /* Server pool accessors (opaque handle API)                         */
+  /*-------------------------------------------------------------------*/
+  /* Return number of connected clients. */
+  net_server_nclients: procedure (server) returns (fixed bin(31));
+    dcl server pointer;
+    dcl 1 s based(server) like server_rec;
+    return (s.n_clients);
+  end net_server_nclients;
+
+  /* Return client handle at index i (1..n_clients). */
+  net_server_client: procedure (server, i) returns (pointer);
+    dcl server pointer;
+    dcl i    fixed bin(31);
+    dcl 1 s  based(server) like server_rec;
+    if i < 1 | i > s.n_clients then return (null());
+    return (s.client_handles(i));
+  end net_server_client;
+
+  /* Remove client at index i and compact pool. */
+  net_server_remove_client: procedure (server, i);
+    dcl server pointer;
+    dcl i    fixed bin(31);
+    dcl 1 s  based(server) like server_rec;
+    dcl j    fixed bin(31);
+    if i < 1 | i > s.n_clients then return;
+    call net_close(s.client_handles(i));
+    do j = i to s.n_clients - 1;
+      s.client_handles(j) = s.client_handles(j + 1);
+    end;
+    s.n_clients = s.n_clients - 1;
+  end net_server_remove_client;
+
+  end net;

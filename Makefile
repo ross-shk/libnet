@@ -54,16 +54,18 @@ $(DIST_INC): $(INC_SRCS)
 	  sed '/^[[:space:]]*%include/d' $$f >> $@; \
 	done
 
-# Compile one program (PL/I) and link the C bridge + PL/I module + runtime.
+# Compile one program (PL/I) and link it against libnet.a + the runtime in a
+# single plic invocation. plic links libpli.a automatically and takes -L/-l for the archive.
 # Default output goes to $(BUILD)/, but OUT can override the full path.
 build-prog: libnet.a
 	@test -n "$(SRC)" || { echo "usage: make build-prog SRC=examples/foo.pli [OUT=foo]"; exit 1; }
 	$(eval OUT_PATH := $(if $(OUT),$(OUT),$(basename $(notdir $(SRC)))))
-	$(PLIC) $(PLIFLAGS) -c $(SRC) $(INC) -o $(OUT_PATH).o
-	$(CC) -o $(OUT_PATH) $(OUT_PATH).o libnet.a $(RTLIB)
+	$(PLIC) $(PLIFLAGS) $(SRC) $(INC) -o $(OUT_PATH) -L $(CURDIR) -lnet
 
-# Trial-compile each example against the interface include.
+# Trial-compile each example against the interface include (no link).
 EXAMPLES = examples/echo_server.pli examples/client.pli examples/resolve.pli examples/fetch.pli examples/fetch_dyn.pli examples/http_client.pli examples/test_read_all.pli examples/test_resolve.pli
+# WIP: examples/multi_echo_server.pli needs per-iteration ON-unit scoping and
+# public pool accessors (WISHLIST #11/#13); add it back when those land.
 example:
 	@for e in $(EXAMPLES); do \
 	  echo "== compiling $$e =="; \
@@ -89,5 +91,5 @@ clean:
 	rm -f $(OBJS) libnet.a
 	rm -f *.o *.ll
 	rm -f examples/*.o examples/*.ll
-	rm -f examples/echo_server examples/client examples/resolve examples/fetch examples/fetch_dyn examples/http_client examples/test_read_all examples/test_resolve
+	rm -f examples/echo_server examples/client examples/resolve examples/fetch examples/fetch_dyn examples/http_client examples/test_read_all examples/test_resolve examples/multi_echo_server
 	rm -rf dist $(BUILD)

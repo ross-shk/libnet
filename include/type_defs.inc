@@ -10,11 +10,11 @@
   * to the library and is declared in source/net.pli, not here.
   */
 
-  /* --- address family / socket type / protocol (POSIX) --------- */
-  /* IPv4 only: address strings are 16-byte dotted quads. AF_INET6 */
-  /* is reserved for a future revision with wider buffers.         */
-  %replace AF_INET      by  2;
-  %replace AF_INET6     by 10;
+ /* --- address family / socket type / protocol (POSIX) --------- */
+ /* IPv4 only: address strings are 16-byte dotted quads. AF_INET6 */
+ /* is reserved for a future revision with wider buffers.         */
+ %replace AF_INET      by  2;
+ %replace AF_INET6     by 10;
  %replace SOCK_STREAM  by  1;
  %replace SOCK_DGRAM   by  2;
  %replace IPPROTO_TCP  by  6;
@@ -25,10 +25,10 @@
  %replace SHUT_WR      by 1;
  %replace SHUT_RDWR    by 2;
 
-  /* --- poll(2) event bits: libnet mask, mapped onto POLLIN/    */
-  /* --- POLLOUT by the C bridge (platform POLLOUT is 4, not 2) --- */
-  %replace POLLIN       by 1;
-  %replace POLLOUT      by 2;
+ /* --- poll(2) event bits: libnet mask, mapped onto POLLIN/    */
+ /* --- POLLOUT by the C bridge (platform POLLOUT is 4, not 2) --- */
+ %replace POLLIN       by 1;
+ %replace POLLOUT      by 2;
 
  /* --- condition oncode sentinels (set via SIGNAL ... SET ONCODE)
   * -------------------------------------------------------------- */
@@ -46,9 +46,12 @@
  %replace NETOPT_KEEPALIVE  by 1;  /* SO_KEEPALIVE */
  %replace NETOPT_NODELAY    by 2;  /* TCP_NODELAY  */
 
-  /* --- send/recv flag: nonblocking ------------------------------ */
-  %replace MSG_DONTWAIT  by 64;     /* send/recv flag: nonblocking */
+ /* --- send/recv flag: nonblocking ------------------------------ */
+ %replace MSG_DONTWAIT  by 64;     /* send/recv flag: nonblocking */
 
  /* --- default buffer capacities -------------------------------- */
  %replace NET_BUF_CAP   by 4096;
  %replace NET_HOST_MAX  by 256;
+
+ /* --- server connection pool ------------------------------------ */
+ %replace NET_MAX_CLIENTS by 1024;

@@ -22,6 +22,7 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <poll.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -197,6 +198,50 @@ int netc_poll(int fd, int events, int ms) {
   int r = poll(&p, 1, ms);
   if (r < 0)
     save_errno();
+  return r;
+}
+
+/* Multi-fd poll: poll across many fds at once.
+ * fds    - array of file descriptors (input)
+ * events - array of event masks (input), one per fd
+ * revents- array of returned event masks (output), one per fd
+ * nfds   - number of entries in each array
+ * ms     - timeout in milliseconds (-1 = infinite)
+ * Returns the number of ready fds, 0 on timeout, -1 on error.
+ * On success, revents[i] contains the ready events for fds[i]. */
+int netc_poll_multi(const int *fds, const int *events, int *revents, int nfds, int ms) {
+  if (nfds <= 0) return 0;
+  struct pollfd *pfds = (struct pollfd *)malloc(nfds * sizeof(struct pollfd));
+  if (!pfds) {
+    errno = ENOMEM;
+    save_errno();
+    return -1;
+  }
+  for (int i = 0; i < nfds; ++i) {
+    pfds[i].fd = fds[i];
+    pfds[i].events = 0;
+    if (events[i] & 1)
+      pfds[i].events |= POLLIN;
+    if (events[i] & 2)
+      pfds[i].events |= POLLOUT;
+    pfds[i].revents = 0;
+  }
+  int r = poll(pfds, nfds, ms);
+  if (r >= 0) {
+    for (int i = 0; i < nfds; ++i) {
+      int re = 0;
+      if (pfds[i].revents & POLLIN)
+        re |= 1;
+      if (pfds[i].revents & POLLOUT)
+        re |= 2;
+      if (pfds[i].revents & (POLLERR | POLLHUP | POLLNVAL))
+        re |= 4;  /* error/hup */
+      revents[i] = re;
+    }
+  } else {
+    save_errno();
+  }
+  free(pfds);
   return r;
 }
 

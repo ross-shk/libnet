@@ -46,7 +46,7 @@
 
  dcl net_read       entry (pointer, char(NET_BUF_CAP) varying)
      returns (fixed bin(31)) external;
-  dcl net_read_all   entry (pointer, char(*) varying controlled)
+ dcl net_read_all   entry (pointer, char(*) varying controlled)
      returns (fixed bin(31)) external;
  dcl net_read_until entry (pointer, char(NET_BUF_CAP) varying, char(1))
     returns (fixed bin(31)) external;
@@ -70,6 +70,10 @@
 
  dcl net_poll       entry (pointer, fixed bin(31), fixed bin(31))
     returns (fixed bin(31)) external;
+ dcl net_poll_multi entry (pointer, fixed bin(31) controlled,
+    fixed bin(31) controlled, fixed bin(31))
+    returns (fixed bin(31)) external;
+ dcl net_server_add_client entry (pointer, pointer) external;
  dcl net_set_timeout      entry (pointer, fixed bin(31),
     fixed bin(31)) external;
  dcl net_set_nonblocking  entry (pointer, bit(1)) external;
@@ -94,6 +98,11 @@
 
  dcl net_listen     entry (fixed bin(31),
     fixed bin(31)) returns (pointer) external;
- dcl net_accept     entry (pointer, pointer) external;
+dcl net_accept     entry (pointer, pointer) external;
 
- dcl net_errtext    entry returns (char(32)) external;
+  dcl net_server_nclients   entry (pointer) returns (fixed bin(31)) external;
+  dcl net_server_client     entry (pointer, fixed bin(31)) returns (pointer)
+     external;
+  dcl net_server_remove_client entry (pointer, fixed bin(31)) external;
+
+  dcl net_errtext    entry returns (char(32)) external;

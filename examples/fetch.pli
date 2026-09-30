@@ -8,8 +8,8 @@
  /*            make build-prog SRC=examples/fetch.pli OUT=fetch */
  /*            ./fetch */
  /* Compiles against net module (link -lnet + libpli.a): */
- /*            build-prog compiles with $(PLIC) -I include, */
- /*            then links fetch.o with libnet.a and libpli.a. */
+ /*            build-prog compiles with $(PLIC) -I include and links */
+ /*            -lnet + libpli.a in one step (no separate cc). */
 
  fetch: procedure options(main);
  %include net;

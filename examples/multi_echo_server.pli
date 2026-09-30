@@ -1,0 +1,89 @@
+ /* multi_echo_server.pli - multi-client echo server (net_poll_multi).
+  *
+  * Module:    multi_echo_server
+  * Purpose:   Listen on port 8090, accept many clients, echo lines
+  *            using a single-threaded event loop with net_poll_multi.
+  * Usage:     multi_echo_server (runs until interrupted)
+  * Compiles against the compiled net module (link -lnet + libpli.a).
+  */
+
+ multi_echo_server: procedure options(main);
+ %include net;
+
+   dcl server        pointer;
+   dcl client        pointer;
+   dcl line          char(NET_BUF_CAP) varying;
+   dcl got           fixed bin(31);
+   dcl done          bit(1);
+   dcl i             fixed bin(31);
+   dcl nready        fixed bin(31);
+   dcl events        fixed bin(31) controlled;
+   dcl revents       fixed bin(31) controlled;
+
+   /* Re-arm conditions so ON-unit failure does not recurse. */
+   on condition(net_error) begin;
+     on condition(net_error) system;
+     put skip list('net error, code=', oncode());
+     stop;
+   end;
+   on condition(net_timeout) begin;
+     on condition(net_timeout) system;
+     put skip list('net timeout');
+     stop;
+   end;
+
+   /* Listen on 127.0.0.1:8090 */
+   server = net_listen(8090, 10);
+   if server = null() then stop;
+   put skip list('multi-client echo server listening on 8090');
+
+   /* Allocate event arrays for max pool size + 1 (server socket) */
+   allocate events (NET_MAX_CLIENTS + 1);
+   allocate revents (NET_MAX_CLIENTS + 1);
+
+   done = '0'b;
+   do while (^done);
+     /* Initialize event masks: server socket + all current clients */
+     events(1) = POLLIN;  /* watch server socket for new connections */
+     do i = 1 to net_server_nclients(server);
+       events(i + 1) = POLLIN;  /* watch clients for readability */
+     end;
+
+     /* Poll server socket + all clients */
+     nready = net_poll_multi(server, events, revents, 1000); /* 1s */
+
+     if nready < 0 then leave;  /* error */
+
+     /* Check server socket for new connections (index 1) */
+     if (revents(1) & POLLIN) ^= 0 then do;
+       call net_server_add_client(server, client);
+       put skip list('new client accepted, total=', net_server_nclients(server));
+     end;
+
+     /* Process ready clients (indices 2..n_clients+1) */
+     do i = 1 to net_server_nclients(server);
+       if (revents(i + 1) & POLLIN) ^= 0 then do;
+         /* Use scoped BEGIN block for per-connection ON-unit */
+         begin;
+           on condition(net_eof) begin;
+             /* Client closed - remove from pool */
+             call net_server_remove_client(server, i);
+             put skip list('client disconnected, left=', net_server_nclients(server));
+           end;
+
+           got = net_read_until(net_server_client(server, i), line, '0A'x);
+           call net_write(net_server_client(server, i), line);
+         end;
+       end;
+     end;
+   end;
+
+   /* Cleanup */
+   do i = 1 to net_server_nclients(server);
+     call net_close(net_server_client(server, i));
+   end;
+   call net_close(server);
+   free events;
+   free revents;
+   put skip list('server done');
+ end multi_echo_server;

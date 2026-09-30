@@ -66,6 +66,18 @@
      returns (fixed bin(31))
      options (linkage(system)) external ('netc_poll');
 
+ /* Multi-fd poll: poll across many fds at once.
+  * fds    - array of file descriptors (input)
+  * events - array of event masks (input), one per fd
+  * revents- array of returned event masks (output), one per fd
+  * nfds   - number of entries in each array
+  * ms     - timeout in milliseconds (-1 = infinite)
+  * Returns the number of ready fds, 0 on timeout, -1 on error.
+  * On success, revents[i] contains the ready events for fds[i]. */
+ dcl netc_poll_multi entry (ptr, ptr, ptr, fixed bin(31), fixed bin(31))
+     returns (fixed bin(31))
+     options (linkage(system)) external ('netc_poll_multi');
+
  /* peer address: ip is a char(*) output buffer; port is an out-param */
  dcl netc_getpeername entry (fixed bin(31), char(*), fixed bin(31),
                           pointer)
@@ -100,26 +112,26 @@
      returns (fixed bin(31))
      options (linkage(system)) external ('netc_getsockerr');
 
-  /* resolve host to dotted-quad in ip */
-  dcl netc_resolve entry (char(*), fixed bin(31), char(*),
-      fixed bin(31))
-      returns (fixed bin(31))
-      options (linkage(system)) external ('netc_resolve');
+ /* resolve host to dotted-quad in ip */
+ dcl netc_resolve entry (char(*), fixed bin(31), char(*),
+     fixed bin(31))
+     returns (fixed bin(31))
+     options (linkage(system)) external ('netc_resolve');
 
  /* strerror(e) into buf (char(*) out) */
  dcl netc_strerror entry (fixed bin(31), char(*), fixed bin(31))
      options (linkage(system)) external ('netc_strerror');
 
  /* UDP datagrams */
-  dcl netc_sendto entry (fixed bin(31), char(*), fixed bin(31),
-      fixed bin(31), char(*), fixed bin(31), fixed bin(31))
-      returns (fixed bin(31))
-      options (linkage(system)) external ('netc_sendto');
+ dcl netc_sendto entry (fixed bin(31), char(*), fixed bin(31),
+     fixed bin(31), char(*), fixed bin(31), fixed bin(31))
+     returns (fixed bin(31))
+     options (linkage(system)) external ('netc_sendto');
 
-  dcl netc_recvfrom entry (fixed bin(31), char(*), fixed bin(31),
-      fixed bin(31), char(*), fixed bin(31), pointer)
-      returns (fixed bin(31))
-      options (linkage(system)) external ('netc_recvfrom');
+ dcl netc_recvfrom entry (fixed bin(31), char(*), fixed bin(31),
+     fixed bin(31), char(*), fixed bin(31), pointer)
+     returns (fixed bin(31))
+     options (linkage(system)) external ('netc_recvfrom');
 
  /* errno cache */
  dcl netc_errno entry ()
