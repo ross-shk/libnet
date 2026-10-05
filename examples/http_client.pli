@@ -3,9 +3,10 @@
  /* Module:    http_client */
  /* Purpose:   Connect to example.com:80, send GET /, */
  /*            read full reply using net_read_all. */
- /* Usage:     cmake --build build --target libnet-examples  (trial-compile)
-               ./build/http_client  (build with: plic examples/http_client.pli -I include -L build -lnet -o build/http_client) */
- /* Compiles with compiled net module (link -lnet). */
+/* Usage:     cmake --build build --target libnet-examples  (trial-compile)
+               ./build/http_client  (build with: plic examples/http_client.pli -I include build/Debug/net.lib -Wl,/DEFAULTLIB:ws2_32 -o build/http_client on Windows;
+                plic examples/http_client.pli -I include -L build -lnet -o build/http_client on Unix) */
+/* Compiles with compiled net module (link net.lib on Windows, -lnet on Unix). */
 
  http_client: procedure options(main);
  %include net;

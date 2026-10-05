@@ -4,12 +4,12 @@
  /* Purpose:   Connect to example.com:80 and fetch / with */
  /*            net_read_all; failures raise conditions. */
  /* Usage:     fetch (no arguments; host is fixed) */
- /* Build:     cmake -S . -B build && cmake --build build
+/* Build:     cmake -S . -B build && cmake --build build
                cmake --build build --target libnet-examples  (trial-compile)
-               ./build/fetch  (build with: plic examples/fetch.pli -I include -L build -lnet -o build/fetch) */
-/* Compiles against net module (link -lnet + libpli.a): */
- /*            plic compiles with -I include and links -lnet + libpli.a */
- /*            in one step (no separate cc). */
+               ./build/fetch  (build with: plic examples/fetch.pli -I include build/Debug/net.lib -Wl,/DEFAULTLIB:ws2_32 -o build/fetch on Windows;
+                plic examples/fetch.pli -I include -L build -lnet -o build/fetch on Unix) */
+/* Compiles against net module (link net.lib on Windows, -lnet on Unix):
+/*            plic compiles with -I include and links the static lib + libpli.a */
 
  fetch: procedure options(main);
  %include net;

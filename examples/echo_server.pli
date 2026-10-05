@@ -3,7 +3,7 @@
     Module:    echo_server 
     Purpose:   Listen on port 8090, accept one client, echo lines. 
     Usage:     echo_server (blocks until a client connects) 
-    Compiles against the compiled net module (link -lnet + libpli.a). */
+    Compiles against the compiled net module (link net.lib on Windows, -lnet on Unix). */
 
  echo_server: procedure options(main);
  %include net;

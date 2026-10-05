@@ -138,22 +138,36 @@ if(LIBNET_HAVE_PLI AND LIBNET_BUILD_EXAMPLES)
 endif()
 
 # Helper: compile+link one PL/I program against the built lib.
-# Equivalent to: plic <src> -I include -o <out> -L <libdir> -lnet
 function(libnet_add_pli_program name src)
   if(NOT LIBNET_HAVE_PLI)
     message(WARNING "libnet_add_pli_program(${name}): plic unavailable, skipping")
     return()
   endif()
   set(_out "${CMAKE_CURRENT_BINARY_DIR}/${name}${CMAKE_EXECUTABLE_SUFFIX}")
-  add_custom_target(${name}
-    COMMAND "${PLIC_EXECUTABLE}" ${_pli_flags}
-      "${src}"
-      -I "${CMAKE_CURRENT_SOURCE_DIR}/include"
-      -o "${_out}"
-      -L "$<TARGET_FILE_DIR:net>" -lnet
-    DEPENDS net "${LIBNET_DIST_INC}" "${src}"
-    COMMENT "plic: linking ${name}"
-    VERBATIM)
+  if(WIN32)
+    # plic's lld-link does not understand -L/-l on Windows; pass the full
+    # path to the static lib and use /DEFAULTLIB for Winsock.
+    add_custom_target(${name}
+      COMMAND "${PLIC_EXECUTABLE}" ${_pli_flags}
+        "${src}"
+        -I "${CMAKE_CURRENT_SOURCE_DIR}/include"
+        -o "${_out}"
+        "$<TARGET_FILE:net>"
+        -Wl,/DEFAULTLIB:ws2_32
+      DEPENDS net "${LIBNET_DIST_INC}" "${src}"
+      COMMENT "plic: linking ${name}"
+      VERBATIM)
+  else()
+    add_custom_target(${name}
+      COMMAND "${PLIC_EXECUTABLE}" ${_pli_flags}
+        "${src}"
+        -I "${CMAKE_CURRENT_SOURCE_DIR}/include"
+        -o "${_out}"
+        -L "$<TARGET_FILE_DIR:net>" -lnet
+      DEPENDS net "${LIBNET_DIST_INC}" "${src}"
+      COMMENT "plic: linking ${name}"
+      VERBATIM)
+  endif()
 endfunction()
 
 # ----------------------------------------------------------- Quick Start target

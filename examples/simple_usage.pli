@@ -4,7 +4,8 @@
  /* Purpose:   Connect to example.com:80, send GET /, */
  /*            read full reply using net_read_all. */
  /* Usage:     cmake --build build --target simple_usage
-               ./build/simple_usage */
+               ./build/simple_usage  (Windows: .\build\simple_usage.exe; cmake/MSBuild
+               sets up the VS SDK environment automatically) */
 
  usage: proc options(main);
  %include net;

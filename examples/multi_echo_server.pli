@@ -4,7 +4,7 @@
   * Purpose:   Listen on port 8090, accept many clients, echo lines
   *            using a single-threaded event loop with net_poll_multi.
   * Usage:     multi_echo_server (runs until interrupted)
-  * Compiles against the compiled net module (link -lnet + libpli.a).
+   * Compiles against the compiled net module (link net.lib on Windows, -lnet on Unix).
   */
 
  multi_echo_server: procedure options(main);

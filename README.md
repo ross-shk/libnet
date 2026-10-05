@@ -22,6 +22,12 @@ cmake --build build --target simple_usage
 ./build/simple_usage
 ```
 
+> **Windows note:** The Visual Studio CMake generator invokes MSBuild, which
+> sets up the MSVC/Windows SDK environment automatically — no separate
+> Developer Command Prompt is needed for `cmake --build`. When invoking `plic`
+> directly (not through CMake), run from a *Developer Command Prompt for VS*
+> so the linker can find `ws2_32.lib` and other SDK libs.
+
 The example (see `examples\simple_usage.pli`) connects to `example.com:80`, sends an HTTP GET request, and reads the full response using `net_read_all`:
 
 ```pli
@@ -121,7 +127,7 @@ $env:PATH = "C:\...\mingw64\bin;" + $env:PATH
 cmake -S . -B build -G "MinGW Makefiles"   # or "Visual Studio 17 2022", Ninja, ...
 cmake --build build
 ctest --test-dir build --output-on-failure
-cmake --install build --prefix C:\libnet   # lib/libnet.a, include/net.inc, ...
+cmake --install build --prefix C:\libnet   # lib/net.lib or libnet.a, include/net.inc, ...
 ```
 
 - Use `-DCMAKE_BUILD_TYPE=Release` for release builds (enables `-O2`/`-O3`
@@ -132,7 +138,10 @@ cmake --install build --prefix C:\libnet   # lib/libnet.a, include/net.inc, ...
   `-DPLIC_EXECUTABLE=...`, or `-DPLI_LLVM=...`), `source/net.pli` is
   compiled and archived into the static lib; when it is absent (typical on
   Windows) the C bridge and its regression test still build and run. Extra
-  `plic` flags: `-DLIBNET_PLIFLAGS="..."`.
+   `plic` flags: `-DLIBNET_PLIFLAGS="..."`. **On Windows**, plic's linker
+   needs the Windows SDK libraries; `cmake --build` (via MSBuild) sets this up
+   automatically, but direct `plic` invocations require a *Developer Command
+   Prompt for VS*.
 - `cmake --build build --target libnet-examples` trial-compiles the
   examples (needs `plic`); `libnet_add_pli_program(name src)` (see
   `CMakeLists.txt`) compiles and links a single PL/I program against the
@@ -141,9 +150,11 @@ cmake --install build --prefix C:\libnet   # lib/libnet.a, include/net.inc, ...
   files (mirrors the uninstall step).
 
 The library is a real linked module: `source/net.pli` is compiled once to
-`net.o` and archived into `libnet.a` beside the C bridge. A program pulls in
-only the **interface** (`%include net;`), then links `-lnet + libpli.a` in a
-single `plic` invocation. The `simple_usage` CMake target mirrors this:
+`net.o` and archived into the static lib (`libnet.a` on Unix, `net.lib` on
+Windows) beside the C bridge. A program pulls in only the **interface**
+(`%include net;`), then links the static lib + `libpli.a` (via plic's
+`-lnet` on Unix, or the `.lib` path on Windows) in a single `plic`
+invocation. The `simple_usage` CMake target mirrors this:
 
 ```bash
 cmake --build build --target simple_usage

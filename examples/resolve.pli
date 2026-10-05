@@ -2,7 +2,7 @@
       
     Module:    resolve   
     Purpose:   Show net_resolve maps host name to IPv4 address.   
-    Compiles against the net module (link -lnet + libpli.a). */
+     Compiles against the net module (link net.lib on Windows, -lnet on Unix). */
 
  resolve: procedure options(main);
  %include net;
