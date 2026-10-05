@@ -10,11 +10,11 @@
  usage: proc options(main);
  %include net;
 
-   dcl conn           pointer;
-   dcl sent           fixed bin(31);
-   dcl req            char(56);
-   dcl resp           char(*) varying controlled;
-   dcl total_len      fixed bin(31);
+   dcl conn              pointer,
+       req               char(56),
+       resp              char(*) varying controlled,
+       (sent, total_len) fixed bin(31);
+             
 
    /* ON units: re-arm so failure inside does not recurse. */
    on condition(net_error) begin;

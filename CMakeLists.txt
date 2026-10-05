@@ -140,7 +140,18 @@ endif()
 # Helper: compile+link one PL/I program against the built lib.
 function(libnet_add_pli_program name src)
   if(NOT LIBNET_HAVE_PLI)
-    message(WARNING "libnet_add_pli_program(${name}): plic unavailable, skipping")
+    # Still create the target so `cmake --build build --target <name>` does not
+    # fail with MSB1009 ("project file does not exist") on generators like Visual
+    # Studio that emit a .vcxproj per target. The target prints a helpful error.
+    add_custom_target(${name}
+      COMMAND ${CMAKE_COMMAND} -E echo
+        "libnet: cannot build '${name}' — plic was not found during configuration."
+      COMMAND ${CMAKE_COMMAND} -E echo
+        "Set -DPLIC_EXECUTABLE=<path> or install pli-llvm, then reconfigure."
+      COMMAND ${CMAKE_COMMAND} -E false
+      COMMENT "plic not available — ${name} cannot be built"
+      VERBATIM)
+    message(WARNING "libnet_add_pli_program(${name}): plic unavailable, target created but will fail at build time")
     return()
   endif()
   set(_out "${CMAKE_CURRENT_BINARY_DIR}/${name}${CMAKE_EXECUTABLE_SUFFIX}")
