@@ -15,9 +15,10 @@
        resp              char(*) varying controlled,
        (sent, total_len) fixed bin(31);
              
-
-   /* ON units: re-arm so failure inside does not recurse. */
    on condition(net_error) begin;
+     /* re-arm so failure inside does not recurse */
+     on condition(net_error) system;  
+
      put skip list('error:', net_errtext());
      stop;
    end;
@@ -25,6 +26,7 @@
    /* Open connection with timeouts and connect. */
    conn = net_open(AF_INET, SOCK_STREAM, 0);
    if conn = null() then stop;
+   
    call net_set_timeout(conn, 10000, 10000);
    call net_connect(conn, 'example.com', 80);
 
