@@ -5,8 +5,10 @@
 - **pli-llvm** — modern open-source PL/I compiler targetting LLVM
   - GitHub: [https://github.com/pli-llvm/pli-llvm](https://github.com/pli-llvm/pli-llvm)
   - Required for compiling `source/net.pli` and linking the C bridge (`source/c_bridge.c`)
-- **make** — standard build tool
-- **C compiler** (clang/gcc) — for the C bridge
+- **make** — standard build tool (Unix Makefile path)
+- **C compiler** (clang/gcc/MSVC/MinGW) — for the C bridge
+- **CMake ≥ 3.16** — portable build (Linux, macOS, Windows); the only
+  build that works on Windows
 
 ## Quick Start
 
@@ -29,10 +31,13 @@ dcl resp      char(*) varying controlled;
 
 conn = net_open(AF_INET, SOCK_STREAM, 0);
 call net_set_timeout(conn, 10000, 10000);
+
 call net_connect(conn, 'example.com', 80);
 call net_send_all(conn, 'GET / HTTP/1.0' || '0D0A'x
    || 'Host: example.com' || '0D0A'x || 'Connection: close' || '0D0A0A'x);
+
 len = net_read_all(conn, resp);
+
 put skip list('fetched', len, 'bytes');
 call net_close(conn);
 ```
@@ -99,6 +104,30 @@ make            # builds libnet.a (C bridge + compiled PL/I module) + dist/net.i
 make test       # builds + runs the C bridge regression test
 make example    # trial-compiles every example against the interface include
 ```
+
+### CMake (portable, incl. Windows)
+
+```powershell
+# MinGW-w64 GCC needs its bin dir (libwinpthread-1.dll) on PATH first:
+$env:PATH = "C:\...\mingw64\bin;" + $env:PATH
+
+cmake -S . -B build -G "MinGW Makefiles"   # or "Visual Studio 17 2022", Ninja, ...
+cmake --build build
+ctest --test-dir build --output-on-failure
+cmake --install build --prefix C:\libnet   # lib/libnet.a, include/net.inc, ...
+```
+
+- The C bridge links Winsock2 (`ws2_32`) automatically on Windows; no
+  manual `WSAStartup` is needed — the bridge initialises Winsock lazily.
+- `plic` is **optional** here: when it is found (via `PATH`,
+  `-DPLIC_EXECUTABLE=...`, or `-DPLI_LLVM=...`), `source/net.pli` is
+  compiled and archived into the static lib exactly like the Makefile
+  does; when it is absent (typical on Windows) the C bridge and its
+  regression test still build and run. Extra `plic` flags:
+  `-DLIBNET_PLIFLAGS="..."`.
+- `cmake --build build --target libnet-examples` trial-compiles the
+  examples (needs `plic`); `libnet_add_pli_program(name src)` (see
+  `CMakeLists.txt`) mirrors `make build-prog SRC=... OUT=...`.
 
 The library is a real linked module: `source/net.pli` is compiled once to `net.o` and archived into `libnet.a` beside the C bridge. A program pulls in only the **interface** (`%include net;`), then `build-prog` compiles it and links `-lnet + libpli.a` in a single `plic` invocation:
 

@@ -28,7 +28,9 @@ int  netc_recvfrom(int, char *, int, int, char *, int, int *);
 int  netc_connect_nb(int, const char *, int, int);
 int  netc_poll(int, int, int);
 
+#ifndef AF_INET
 #define AF_INET 2
+#endif
 /* Libnet poll mask (see type_defs.inc): 1=readable, 2=writable. */
 #define NET_POLLIN 1
 #define NET_POLLOUT 2

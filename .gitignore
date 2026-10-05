@@ -1,0 +1,8 @@
+# Compiler/build diagnostic output
+err.txt
+gcc_err.txt
+gcc_out.txt
+gcc_verbose.txt
+
+# Build directory (CMake artifacts)
+build/
