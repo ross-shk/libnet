@@ -5,8 +5,7 @@
  * success and FAIL on the first problem; exits non-zero on failure.
  *
  * Build + run:
- *   cc -O2 -Itests -Isource tests/c_bridge.c source/c_bridge.c -o /tmp/cb_test
- *   /tmp/cb_test
+ *   cmake -S . -B build && cmake --build build && ctest --test-dir build --output-on-failure
  */
 #include <stdio.h>
 #include <string.h>

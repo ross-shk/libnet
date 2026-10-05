@@ -10,7 +10,9 @@
               dimension
               - Reads HTTP response of unknown length into CONTROLLED 
               string
-   Build:     make build-prog SRC=examples/fetch_dyn.pli OUT=fetch_dyn
+   Build:     cmake -S . -B build && cmake --build build
+              cmake --build build --target libnet-examples  (trial-compile)
+              ./build/fetch_dyn  (build with: plic examples/fetch_dyn.pli -I include -L build -lnet -o build/fetch_dyn)
  */
 
  fetch_dyn: procedure options(main);

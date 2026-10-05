@@ -4,12 +4,12 @@
  /* Purpose:   Connect to example.com:80 and fetch / with */
  /*            net_read_all; failures raise conditions. */
  /* Usage:     fetch (no arguments; host is fixed) */
- /* Build:     make */
- /*            make build-prog SRC=examples/fetch.pli OUT=fetch */
- /*            ./fetch */
- /* Compiles against net module (link -lnet + libpli.a): */
- /*            build-prog compiles with $(PLIC) -I include and links */
- /*            -lnet + libpli.a in one step (no separate cc). */
+ /* Build:     cmake -S . -B build && cmake --build build
+               cmake --build build --target libnet-examples  (trial-compile)
+               ./build/fetch  (build with: plic examples/fetch.pli -I include -L build -lnet -o build/fetch) */
+/* Compiles against net module (link -lnet + libpli.a): */
+ /*            plic compiles with -I include and links -lnet + libpli.a */
+ /*            in one step (no separate cc). */
 
  fetch: procedure options(main);
  %include net;

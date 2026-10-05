@@ -3,8 +3,8 @@
  /* Module:    simple_usage */
  /* Purpose:   Connect to example.com:80, send GET /, */
  /*            read full reply using net_read_all. */
- /* Usage:     make build-prog SRC=examples/simple_usage */
- /*            ./simple_usage */
+ /* Usage:     cmake --build build --target simple_usage
+               ./build/simple_usage */
 
  usage: proc options(main);
  %include net;

@@ -3,8 +3,8 @@
  /* Module:    http_client */
  /* Purpose:   Connect to example.com:80, send GET /, */
  /*            read full reply using net_read_all. */
- /* Usage:     make build-prog SRC=examples/http_client */
- /*            ./http_client */
+ /* Usage:     cmake --build build --target libnet-examples  (trial-compile)
+               ./build/http_client  (build with: plic examples/http_client.pli -I include -L build -lnet -o build/http_client) */
  /* Compiles with compiled net module (link -lnet). */
 
  http_client: procedure options(main);

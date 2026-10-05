@@ -1,6 +1,6 @@
 # Expects INC_FILES (";"-separated list of input .inc files) and OUT_FILE.
 # Concatenates the inputs into OUT_FILE, dropping any line whose first
-# non-blank characters are "%include" (mirrors the Makefile's sed filter).
+# non-blank characters are "%include".
 # Works on whole-text regexes so PL/I semicolons can never corrupt the split.
 if(NOT DEFINED INC_FILES OR NOT DEFINED OUT_FILE)
   message(FATAL_ERROR "GenDistInc.cmake requires INC_FILES and OUT_FILE")

@@ -4,21 +4,22 @@
 
 - **pli-llvm** — modern open-source PL/I compiler targetting LLVM
   - GitHub: [https://github.com/pli-llvm/pli-llvm](https://github.com/pli-llvm/pli-llvm)
-  - Required for compiling `source/net.pli` and linking the C bridge (`source/c_bridge.c`)
-- **make** — standard build tool (Unix Makefile path)
+  - Required for compiling `source/net.pli` and linking PL/I programs against
+    the C bridge (`source/c_bridge.c`)
 - **C compiler** (clang/gcc/MSVC/MinGW) — for the C bridge
-- **CMake ≥ 3.16** — portable build (Linux, macOS, Windows); the only
-  build that works on Windows
+- **CMake ≥ 3.16** — portable build system (Linux, macOS, Windows)
+- **make** — CMake generator backends (Ninja, Unix Makefiles, MSBuild, etc.)
+  are all compatible; a working backend is needed automatically
 
 ## Quick Start
 
 ```bash
 # Build the library
-make
+cmake -S . -B build && cmake --build build
 
-# Compile and run the simple example
-make build-prog SRC=examples/simple_usage.pli
-./simple_usage
+# Compile and run the simple example (plic required)
+cmake --build build --target simple_usage
+./build/simple_usage
 ```
 
 The example (see `examples\simple_usage.pli`) connects to `example.com:80`, sends an HTTP GET request, and reads the full response using `net_read_all`:
@@ -100,9 +101,15 @@ Names follow classic PL/I convention: short meaningful module prefixes, lowercas
 ## Build
 
 ```bash
-make            # builds libnet.a (C bridge + compiled PL/I module) + dist/net.inc
-make test       # builds + runs the C bridge regression test
-make example    # trial-compiles every example against the interface include
+# Build the library (C bridge + PL/I module if plic available) + dist/net.inc
+cmake -S . -B build
+cmake --build build
+
+# Run the C bridge regression test
+ctest --test-dir build --output-on-failure
+
+# Trial-compile all examples (requires plic)
+cmake --build build --target libnet-examples
 ```
 
 ### CMake (portable, incl. Windows)
@@ -117,27 +124,37 @@ ctest --test-dir build --output-on-failure
 cmake --install build --prefix C:\libnet   # lib/libnet.a, include/net.inc, ...
 ```
 
+- Use `-DCMAKE_BUILD_TYPE=Release` for release builds (enables `-O2`/`-O3`
+  optimization; CMake does not optimize by default in non-release builds).
 - The C bridge links Winsock2 (`ws2_32`) automatically on Windows; no
   manual `WSAStartup` is needed — the bridge initialises Winsock lazily.
-- `plic` is **optional** here: when it is found (via `PATH`,
+- `plic` is **optional**: when it is found (via `PATH`,
   `-DPLIC_EXECUTABLE=...`, or `-DPLI_LLVM=...`), `source/net.pli` is
-  compiled and archived into the static lib exactly like the Makefile
-  does; when it is absent (typical on Windows) the C bridge and its
-  regression test still build and run. Extra `plic` flags:
-  `-DLIBNET_PLIFLAGS="..."`.
+  compiled and archived into the static lib; when it is absent (typical on
+  Windows) the C bridge and its regression test still build and run. Extra
+  `plic` flags: `-DLIBNET_PLIFLAGS="..."`.
 - `cmake --build build --target libnet-examples` trial-compiles the
   examples (needs `plic`); `libnet_add_pli_program(name src)` (see
-  `CMakeLists.txt`) mirrors `make build-prog SRC=... OUT=...`.
+  `CMakeLists.txt`) compiles and links a single PL/I program against the
+  library.
+- `cmake --build build --target libnet_uninstall` removes all installed
+  files (mirrors the uninstall step).
 
-The library is a real linked module: `source/net.pli` is compiled once to `net.o` and archived into `libnet.a` beside the C bridge. A program pulls in only the **interface** (`%include net;`), then `build-prog` compiles it and links `-lnet + libpli.a` in a single `plic` invocation:
+The library is a real linked module: `source/net.pli` is compiled once to
+`net.o` and archived into `libnet.a` beside the C bridge. A program pulls in
+only the **interface** (`%include net;`), then links `-lnet + libpli.a` in a
+single `plic` invocation. The `simple_usage` CMake target mirrors this:
 
 ```bash
-make build-prog SRC=examples/echo_server.pli OUT=echo_server
+cmake --build build --target simple_usage
 ```
 
-`make test` (the C bridge) passes. `make all` builds the C bridge, then compiles `source/net.pli`.
+`ctest --test-dir build --output-on-failure` runs the `netc_*` bridge regression
+test (passing). `cmake --build build` builds the C bridge, then compiles
+`source/net.pli` when plic is available.
 
-`make example` trial-compiles every example (compile-only).
+`cmake --build build --target libnet-examples` trial-compiles every example
+(compile-only).
 
 ## API sketch
 
@@ -197,8 +214,10 @@ Note `net_poll` does **not** raise `net_timeout` on a timeout — a poll timeout
 ## Status
 
 The library is a compiled module rather than `%include`d source.  
-`make test` runs the `netc_*` bridge regression test (passing);
+`ctest --test-dir build --output-on-failure` runs the `netc_*` bridge regression
+test (passing);
 
-`make all`builds the C bridge and the PL/I module;
+`cmake --build build` builds the C bridge, then compiles `source/net.pli`
+when plic is available;
 
-`make example` trial-compiles the examples.
+`cmake --build build --target libnet-examples` trial-compiles the examples.

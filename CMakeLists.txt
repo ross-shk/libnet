@@ -1,6 +1,6 @@
 # libnet — CMake build (portable: Linux, macOS, Windows).
 #
-# Layout mirrors the Makefile:
+# Layout:
 #   lib net        <- source/c_bridge.c [+ compiled source/net.pli if plic
 #                     is available]  (static lib, installed with net.inc)
 #   dist/net.inc   <- include/{net,type_defs,errno}.inc minus %include lines
@@ -57,8 +57,8 @@ set(LIBNET_PLI_INCLUDES
   "${CMAKE_CURRENT_SOURCE_DIR}/include/errno.inc")
 
 if(LIBNET_HAVE_PLI)
-  # Compile source/net.pli once; the object joins the static lib exactly
-  # like `ar rcs libnet.a c_bridge.o net.o` in the Makefile.
+  # Compile source/net.pli once; the object joins the static lib alongside
+  # the C bridge object (equivalent to the old `ar rcs libnet.a c_bridge.o net.o`).
   set(LIBNET_PLI_OBJ "${CMAKE_CURRENT_BINARY_DIR}/net${CMAKE_C_OUTPUT_EXTENSION}")
   if(LIBNET_PLIFLAGS)
     set(_pli_flags ${LIBNET_PLIFLAGS})
@@ -137,8 +137,8 @@ if(LIBNET_HAVE_PLI AND LIBNET_BUILD_EXAMPLES)
   add_custom_target(libnet-examples DEPENDS ${_example_objs})
 endif()
 
-# Helper: compile+link one PL/I program against the built lib, mirroring
-# `make build-prog SRC=examples/foo.pli OUT=foo`.
+# Helper: compile+link one PL/I program against the built lib.
+# Equivalent to: plic <src> -I include -o <out> -L <libdir> -lnet
 function(libnet_add_pli_program name src)
   if(NOT LIBNET_HAVE_PLI)
     message(WARNING "libnet_add_pli_program(${name}): plic unavailable, skipping")
@@ -155,6 +155,12 @@ function(libnet_add_pli_program name src)
     COMMENT "plic: linking ${name}"
     VERBATIM)
 endfunction()
+
+# ----------------------------------------------------------- Quick Start target
+# simple_usage.pli — the Quick Start example, buildable via CMake so the README
+# instructions work out of the box.
+libnet_add_pli_program(simple_usage
+  "${CMAKE_CURRENT_SOURCE_DIR}/examples/simple_usage.pli")
 
 # ---------------------------------------------------------------- install
 install(TARGETS net EXPORT libnet-targets
@@ -173,3 +179,12 @@ endif()
 configure_file(cmake/libnet.pc.in libnet.pc @ONLY)
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/libnet.pc"
   DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig")
+
+# --------------------------------------------------------------- uninstall
+# Removes all files recorded in install_manifest.txt (produced by `cmake --install`).
+configure_file(
+  "cmake/cmake_uninstall.cmake.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake"
+  @ONLY)
+add_custom_target(libnet_uninstall
+  COMMAND "${CMAKE_COMMAND}" -P "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake")
