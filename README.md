@@ -17,14 +17,14 @@
 # Build the library
 cmake -S . -B build && cmake --build build
 
-# Compile and run the simple example (plic required)
+# Compile and run the simple example (pli-llvm required)
 cmake --build build --target simple_usage
 ./build/simple_usage
 ```
 
 > **Windows note:** The Visual Studio CMake generator invokes MSBuild, which
 > sets up the MSVC/Windows SDK environment automatically — no separate
-> Developer Command Prompt is needed for `cmake --build`. When invoking `plic`
+> Developer Command Prompt is needed for `cmake --build`. When invoking `pli-llvm`
 > directly (not through CMake), run from a *Developer Command Prompt for VS*
 > so the linker can find `ws2_32.lib` and other SDK libs.
 
@@ -107,14 +107,14 @@ Names follow classic PL/I convention: short meaningful module prefixes, lowercas
 ## Build
 
 ```bash
-# Build the library (C bridge + PL/I module if plic available) + dist/net.inc
+# Build the library (C bridge + PL/I module if pli-llvm is available) + dist/net.inc
 cmake -S . -B build
 cmake --build build
 
 # Run the C bridge regression test
 ctest --test-dir build --output-on-failure
 
-# Trial-compile all examples (requires plic)
+# Trial-compile all examples (requires pli-llvm)
 cmake --build build --target libnet-examples
 ```
 
@@ -134,16 +134,16 @@ cmake --install build --prefix C:\libnet   # lib/net.lib or libnet.a, include/ne
   optimization; CMake does not optimize by default in non-release builds).
 - The C bridge links Winsock2 (`ws2_32`) automatically on Windows; no
   manual `WSAStartup` is needed — the bridge initialises Winsock lazily.
-- `plic` is **optional**: when it is found (via `PATH`,
-  `-DPLIC_EXECUTABLE=...`, or `-DPLI_LLVM=...`), `source/net.pli` is
+- `pli-llvm` is **optional**: when it is found (via `PATH`,
+  `-DPLI_EXECUTABLE=...`, or `-DPLI_LLVM=...`), `source/net.pli` is
   compiled and archived into the static lib; when it is absent (typical on
   Windows) the C bridge and its regression test still build and run. Extra
-   `plic` flags: `-DLIBNET_PLIFLAGS="..."`. **On Windows**, plic's linker
+   `pli-llvm` flags: `-DLIBNET_PLIFLAGS="..."`. **On Windows**, pli-llvm's linker
    needs the Windows SDK libraries; `cmake --build` (via MSBuild) sets this up
-   automatically, but direct `plic` invocations require a *Developer Command
+   automatically, but direct `pli-llvm` invocations require a *Developer Command
    Prompt for VS*.
 - `cmake --build build --target libnet-examples` trial-compiles the
-  examples (needs `plic`); `libnet_add_pli_program(name src)` (see
+  examples (needs `pli-llvm`); `libnet_add_pli_program(name src)` (see
   `CMakeLists.txt`) compiles and links a single PL/I program against the
   library.
 - `cmake --build build --target libnet_uninstall` removes all installed
@@ -152,8 +152,8 @@ cmake --install build --prefix C:\libnet   # lib/net.lib or libnet.a, include/ne
 The library is a real linked module: `source/net.pli` is compiled once to
 `net.o` and archived into the static lib (`libnet.a` on Unix, `net.lib` on
 Windows) beside the C bridge. A program pulls in only the **interface**
-(`%include net;`), then links the static lib + `libpli.a` (via plic's
-`-lnet` on Unix, or the `.lib` path on Windows) in a single `plic`
+(`%include net;`), then links the static lib + `libpli.a` (via pli-llvm's
+`-lnet` on Unix, or the `.lib` path on Windows) in a single `pli-llvm`
 invocation. The `simple_usage` CMake target mirrors this:
 
 ```bash
@@ -162,7 +162,7 @@ cmake --build build --target simple_usage
 
 `ctest --test-dir build --output-on-failure` runs the `netc_*` bridge regression
 test (passing). `cmake --build build` builds the C bridge, then compiles
-`source/net.pli` when plic is available.
+`source/net.pli` when pli-llvm is available.
 
 `cmake --build build --target libnet-examples` trial-compiles every example
 (compile-only).
@@ -229,6 +229,6 @@ The library is a compiled module rather than `%include`d source.
 test (passing);
 
 `cmake --build build` builds the C bridge, then compiles `source/net.pli`
-when plic is available;
+when pli-llvm is available;
 
 `cmake --build build --target libnet-examples` trial-compiles the examples.

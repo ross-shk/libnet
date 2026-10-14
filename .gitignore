@@ -4,6 +4,8 @@ gcc_err.txt
 gcc_out.txt
 gcc_verbose.txt
 
+deprecated/
+
 # Build directory (CMake artifacts)
 build/
 

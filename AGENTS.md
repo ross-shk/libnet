@@ -38,14 +38,14 @@ cmake --build build --target clean
 rm -rf build
 ```
 
-## Build an Example Program (requires plic)
+## Build an Example Program (requires pli-llvm)
 
 ```bash
 cmake --build build --target simple_usage
 ./build/simple_usage
 ```
 
-## Trial-Compile All Examples (requires plic)
+## Trial-Compile All Examples (requires pli-llvm)
 
 ```bash
 cmake --build build --target libnet-examples
@@ -53,8 +53,8 @@ cmake --build build --target libnet-examples
 
 ## Environment
 
-- `PLI_LLVM`: pli-llvm install prefix (sets `plic` location)
-- `PLIC_EXECUTABLE`: explicit path to the plic compiler
-- `LIBNET_PLIFLAGS`: extra flags forwarded to plic
-- `LIBNET_ENABLE_PLI`: ON (default) — build the PL/I module when plic is found
-- `LIBNET_BUILD_EXAMPLES`: ON (default) — trial-compile examples when plic is found
+- `PLI_LLVM`: pli-llvm install prefix (sets the PL/I compiler location)
+- `PLI_EXECUTABLE`: explicit path to the PL/I compiler
+- `LIBNET_PLIFLAGS`: extra flags forwarded to the PL/I compiler
+- `LIBNET_ENABLE_PLI`: ON (default) — build the PL/I module when the PL/I compiler is found
+- `LIBNET_BUILD_EXAMPLES`: ON (default) — trial-compile examples when the PL/I compiler is found

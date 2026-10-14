@@ -6,10 +6,10 @@
  /* Usage:     fetch (no arguments; host is fixed) */
 /* Build:     cmake -S . -B build && cmake --build build
                cmake --build build --target libnet-examples  (trial-compile)
-               ./build/fetch  (build with: plic examples/fetch.pli -I include build/Debug/net.lib -Wl,/DEFAULTLIB:ws2_32 -o build/fetch on Windows;
-                plic examples/fetch.pli -I include -L build -lnet -o build/fetch on Unix) */
+               ./build/fetch  (build with: pli-llvm examples/fetch.pli -I include build/Debug/net.lib -Wl,/DEFAULTLIB:ws2_32 -o build/fetch on Windows;
+                pli-llvm examples/fetch.pli -I include -L build -lnet -o build/fetch on Unix) */
 /* Compiles against net module (link net.lib on Windows, -lnet on Unix):
-/*            plic compiles with -I include and links the static lib + libpli.a */
+/*            pli-llvm compiles with -I include and links the static lib + libpli.a */
 
  fetch: procedure options(main);
  %include net;

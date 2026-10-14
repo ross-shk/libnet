@@ -1,26 +1,26 @@
 # libnet — CMake build (portable: Linux, macOS, Windows).
 #
 # Layout:
-#   lib net        <- source/c_bridge.c [+ compiled source/net.pli if plic
+#   lib net        <- source/c_bridge.c [+ compiled source/net.pli if the PL/I compiler
 #                     is available]  (static lib, installed with net.inc)
 #   dist/net.inc   <- include/{net,type_defs,errno}.inc minus %include lines
 #   cb_test        <- C bridge regression test (CTest)
-#   examples       <- trial-compile of examples/*.pli (needs plic)
+#   examples       <- trial-compile of examples/*.pli (needs pli-llvm)
 #
-# The PL/I module is optional: pli-llvm's `plic` is usually absent on
+# The PL/I module is optional: pli-llvm's `pli` compiler is usually absent on
 # Windows, so when it is not found the C bridge + its test still build
-# and run. Point CMake at plic with -DPLIC_EXECUTABLE=... or PLI_LLVM.
+# and run. Point CMake at the PL/I compiler with -DPLI_EXECUTABLE=... or PLI_LLVM.
 cmake_minimum_required(VERSION 3.16)
 project(libnet LANGUAGES C VERSION 0.1.0)
 
 include(GNUInstallDirs)
 include(CTest)
 
-option(LIBNET_ENABLE_PLI "Build the compiled PL/I module when plic is found" ON)
-option(LIBNET_BUILD_EXAMPLES "Trial-compile the PL/I examples (needs plic)" ON)
+option(LIBNET_ENABLE_PLI "Build the compiled PL/I module when the PL/I compiler is found" ON)
+option(LIBNET_BUILD_EXAMPLES "Trial-compile the PL/I examples (needs pli-llvm)" ON)
 
-set(LIBNET_PLIFLAGS "" CACHE STRING "Extra flags forwarded to plic")
-set(PLI_LLVM "$ENV{PLI_LLVM}" CACHE PATH "pli-llvm install prefix (bin/plic)")
+set(LIBNET_PLIFLAGS "" CACHE STRING "Extra flags forwarded to the PL/I compiler")
+set(PLI_LLVM "$ENV{PLI_LLVM}" CACHE PATH "pli-llvm install prefix (bin/pli)")
 
 # ---------------------------------------------------------------- C bridge
 add_library(net STATIC source/c_bridge.c)
@@ -40,12 +40,12 @@ if(WIN32)
 endif()
 
 # ------------------------------------------------------- PL/I module (opt)
-find_program(PLIC_EXECUTABLE NAMES plic
+find_program(PLI_EXECUTABLE NAMES pli
   HINTS "${PLI_LLVM}/bin" /usr/local/bin /opt/pli-llvm/bin
   DOC "pli-llvm compiler driver")
-mark_as_advanced(PLIC_EXECUTABLE)
+mark_as_advanced(PLI_EXECUTABLE)
 
-if(LIBNET_ENABLE_PLI AND PLIC_EXECUTABLE)
+if(LIBNET_ENABLE_PLI AND PLI_EXECUTABLE)
   set(LIBNET_HAVE_PLI TRUE)
 else()
   set(LIBNET_HAVE_PLI FALSE)
@@ -65,18 +65,18 @@ if(LIBNET_HAVE_PLI)
   endif()
   add_custom_command(
     OUTPUT "${LIBNET_PLI_OBJ}"
-    COMMAND "${PLIC_EXECUTABLE}" ${_pli_flags}
+    COMMAND "${PLI_EXECUTABLE}" ${_pli_flags}
       -c "${CMAKE_CURRENT_SOURCE_DIR}/source/net.pli"
       -I "${CMAKE_CURRENT_SOURCE_DIR}/include"
       -o "${LIBNET_PLI_OBJ}"
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/source/net.pli" ${LIBNET_PLI_INCLUDES}
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-    COMMENT "plic: compiling source/net.pli"
+    COMMENT "PL/I compiler: compiling source/net.pli"
     VERBATIM)
   target_sources(net PRIVATE "${LIBNET_PLI_OBJ}")
-  message(STATUS "libnet: plic found (${PLIC_EXECUTABLE}), PL/I module enabled")
+  message(STATUS "libnet: PL/I compiler found (${PLI_EXECUTABLE}), PL/I module enabled")
 else()
-  message(STATUS "libnet: plic not found, building C bridge only (PL/I module skipped)")
+  message(STATUS "libnet: PL/I compiler not found, building C bridge only (PL/I module skipped)")
 endif()
 
 # ------------------------------------------------------------ dist/net.inc
@@ -112,7 +112,7 @@ if(BUILD_TESTING)
   add_test(NAME c_bridge COMMAND cb_test)
 endif()
 
-# ------------------------------------------------------ examples (pli only)
+# ------------------------------------------------------ examples (PL/I only)
 if(LIBNET_HAVE_PLI AND LIBNET_BUILD_EXAMPLES)
   set(LIBNET_EXAMPLES
     echo_server client resolve fetch fetch_dyn http_client
@@ -124,12 +124,13 @@ if(LIBNET_HAVE_PLI AND LIBNET_BUILD_EXAMPLES)
       set(_obj "${CMAKE_CURRENT_BINARY_DIR}/examples/${ex}${CMAKE_C_OUTPUT_EXTENSION}")
       add_custom_command(
         OUTPUT "${_obj}"
-        COMMAND "${PLIC_EXECUTABLE}" ${_pli_flags}
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/examples"
+        COMMAND "${PLI_EXECUTABLE}" ${_pli_flags}
           -c "${_src}"
           -I "${CMAKE_CURRENT_SOURCE_DIR}/include"
           -o "${_obj}"
         DEPENDS "${_src}" "${LIBNET_DIST_INC}"
-        COMMENT "plic: trial-compiling examples/${ex}.pli"
+        COMMENT "PL/I compiler: trial-compiling examples/${ex}.pli"
         VERBATIM)
       list(APPEND _example_objs "${_obj}")
     endif()
@@ -145,38 +146,38 @@ function(libnet_add_pli_program name src)
     # Studio that emit a .vcxproj per target. The target prints a helpful error.
     add_custom_target(${name}
       COMMAND ${CMAKE_COMMAND} -E echo
-        "libnet: cannot build '${name}' — plic was not found during configuration."
+        "libnet: cannot build '${name}' — PL/I compiler was not found during configuration."
       COMMAND ${CMAKE_COMMAND} -E echo
-        "Set -DPLIC_EXECUTABLE=<path> or install pli-llvm, then reconfigure."
+        "Set -DPLI_EXECUTABLE=<path> or install pli-llvm, then reconfigure."
       COMMAND ${CMAKE_COMMAND} -E false
-      COMMENT "plic not available — ${name} cannot be built"
+      COMMENT "PL/I compiler not available — ${name} cannot be built"
       VERBATIM)
-    message(WARNING "libnet_add_pli_program(${name}): plic unavailable, target created but will fail at build time")
+    message(WARNING "libnet_add_pli_program(${name}): PL/I compiler unavailable, target created but will fail at build time")
     return()
   endif()
   set(_out "${CMAKE_CURRENT_BINARY_DIR}/${name}${CMAKE_EXECUTABLE_SUFFIX}")
   if(WIN32)
-    # plic's lld-link does not understand -L/-l on Windows; pass the full
+    # pli-llvm's lld-link does not understand -L/-l on Windows; pass the full
     # path to the static lib and use /DEFAULTLIB for Winsock.
     add_custom_target(${name}
-      COMMAND "${PLIC_EXECUTABLE}" ${_pli_flags}
+      COMMAND "${PLI_EXECUTABLE}" ${_pli_flags}
         "${src}"
         -I "${CMAKE_CURRENT_SOURCE_DIR}/include"
         -o "${_out}"
         "$<TARGET_FILE:net>"
         -Wl,/DEFAULTLIB:ws2_32
       DEPENDS net "${LIBNET_DIST_INC}" "${src}"
-      COMMENT "plic: linking ${name}"
+      COMMENT "PL/I compiler: linking ${name}"
       VERBATIM)
   else()
     add_custom_target(${name}
-      COMMAND "${PLIC_EXECUTABLE}" ${_pli_flags}
+      COMMAND "${PLI_EXECUTABLE}" ${_pli_flags}
         "${src}"
         -I "${CMAKE_CURRENT_SOURCE_DIR}/include"
         -o "${_out}"
         -L "$<TARGET_FILE_DIR:net>" -lnet
       DEPENDS net "${LIBNET_DIST_INC}" "${src}"
-      COMMENT "plic: linking ${name}"
+      COMMENT "PL/I compiler: linking ${name}"
       VERBATIM)
   endif()
 endfunction()
