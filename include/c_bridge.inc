@@ -10,12 +10,20 @@
   * lives in PL/I.
   */
 
- /* socket / listen / accept */
+ /* --- Socket lifecycle (raw syscalls) --- */
  dcl netc_socket entry (fixed bin(31), fixed bin(31), fixed bin(31))
      returns (fixed bin(31))
      options (linkage(system)) external ('netc_socket');
 
- dcl netc_bind entry (fixed bin(31), fixed bin(31))
+ dcl netc_close  entry (fixed bin(31))
+     returns (fixed bin(31))
+     options (linkage(system)) external ('netc_close');
+
+ dcl netc_shutdown entry (fixed bin(31), fixed bin(31))
+     returns (fixed bin(31))
+     options (linkage(system)) external ('netc_shutdown');
+
+ dcl netc_bind entry (fixed bin(31), char(*), fixed bin(31))
      returns (fixed bin(31))
      options (linkage(system)) external ('netc_bind');
 
@@ -27,13 +35,12 @@
      returns (fixed bin(31))
      options (linkage(system)) external ('netc_accept');
 
- /* Connect using a host buffer with an explicit length. */
- dcl netc_connect entry (fixed bin(31), char(*), fixed bin(31),
-     fixed bin(31))
+ /* --- Raw connect (takes sockaddr_in buffer) --- */
+ dcl netc_connect entry (fixed bin(31), char(*), fixed bin(31))
      returns (fixed bin(31))
      options (linkage(system)) external ('netc_connect');
 
- /* Send and receive using a buffer with an explicit length. */
+ /* --- Raw send/recv --- */
  dcl netc_send entry (fixed bin(31), char(*), fixed bin(31),
      fixed bin(31))
      returns (fixed bin(31))
@@ -44,96 +51,65 @@
      returns (fixed bin(31))
      options (linkage(system)) external ('netc_recv');
 
- /* close / shutdown */
- dcl netc_close entry (fixed bin(31))
-     returns (fixed bin(31))
-     options (linkage(system)) external ('netc_close');
-
- dcl netc_shutdown entry (fixed bin(31), fixed bin(31))
-     returns (fixed bin(31))
-     options (linkage(system)) external ('netc_shutdown');
-
- /* timeouts / nonblocking / poll */
- dcl netc_settimeout entry (fixed bin(31), fixed bin(31), fixed bin(31))
-     returns (fixed bin(31))
-     options (linkage(system)) external ('netc_settimeout');
-
- dcl netc_setnonblock entry (fixed bin(31), fixed bin(31))
-     returns (fixed bin(31))
-     options (linkage(system)) external ('netc_setnonblock');
-
- dcl netc_poll entry (fixed bin(31), fixed bin(31), fixed bin(31))
-     returns (fixed bin(31))
-     options (linkage(system)) external ('netc_poll');
-
- /* Multi-fd poll: poll across many fds at once.
-  * fds    - array of file descriptors (input)
-  * events - array of event masks (input), one per fd
-  * revents- array of returned event masks (output), one per fd
-  * nfds   - number of entries in each array
-  * ms     - timeout in milliseconds (-1 = infinite)
-  * Returns the number of ready fds, 0 on timeout, -1 on error.
-  * On success, revents[i] contains the ready events for fds[i]. */
- dcl netc_poll_multi entry (ptr, ptr, ptr, fixed bin(31), fixed bin(31))
-     returns (fixed bin(31))
-     options (linkage(system)) external ('netc_poll_multi');
-
- /* peer address: ip is a char(*) output buffer; port is an out-param */
- dcl netc_getpeername entry (fixed bin(31), char(*), fixed bin(31),
-                          pointer)
-     returns (fixed bin(31))
-     options (linkage(system)) external ('netc_getpeername');
-
- /* local address (getsockname): ip char(*) out, port out-param */
- dcl netc_getsockname entry (fixed bin(31), char(*), fixed bin(31),
-                          pointer)
-     returns (fixed bin(31))
-     options (linkage(system)) external ('netc_getsockname');
-
- /* socket option by libnet code: netc_sockopt(fd, opt, value) */
- dcl netc_sockopt entry (fixed bin(31), fixed bin(31), fixed bin(31))
-     returns (fixed bin(31))
-     options (linkage(system)) external ('netc_sockopt');
-
- /* SO_LINGER(fd, on, seconds) */
- dcl netc_setlinger entry (fixed bin(31), fixed bin(31), fixed bin(31))
-     returns (fixed bin(31))
-     options (linkage(system)) external ('netc_setlinger');
-
- /* nonblocking connect: 0 done, -1 in progress (errno=EINPROGRESS),
-  * -2 error. host is char(*) with an explicit length. */
- dcl netc_connect_nb entry (fixed bin(31), char(*), fixed bin(31),
-                         fixed bin(31))
-     returns (fixed bin(31))
-     options (linkage(system)) external ('netc_connect_nb');
-
- /* SO_ERROR check after a nonblocking connect; err via out-param */
- dcl netc_getsockerr entry (fixed bin(31), pointer)
-     returns (fixed bin(31))
-     options (linkage(system)) external ('netc_getsockerr');
-
- /* resolve host to dotted-quad in ip */
- dcl netc_resolve entry (char(*), fixed bin(31), char(*),
-     fixed bin(31))
-     returns (fixed bin(31))
-     options (linkage(system)) external ('netc_resolve');
-
- /* strerror(e) into buf (char(*) out) */
- dcl netc_strerror entry (fixed bin(31), char(*), fixed bin(31))
-     options (linkage(system)) external ('netc_strerror');
-
- /* UDP datagrams */
+ /* --- Raw sendto/recvfrom (take/fill sockaddr_in buffers) --- */
  dcl netc_sendto entry (fixed bin(31), char(*), fixed bin(31),
-     fixed bin(31), char(*), fixed bin(31), fixed bin(31))
+     fixed bin(31), char(*), fixed bin(31))
      returns (fixed bin(31))
      options (linkage(system)) external ('netc_sendto');
 
  dcl netc_recvfrom entry (fixed bin(31), char(*), fixed bin(31),
-     fixed bin(31), char(*), fixed bin(31), pointer)
+     fixed bin(31), char(*), pointer)
      returns (fixed bin(31))
      options (linkage(system)) external ('netc_recvfrom');
 
- /* errno cache */
+ /* --- Raw socket options ---
+  * level/optname are the real SOL_SOCKET/SO_* values; PL/I
+  * maps NETOPT_* codes via map_opt. */
+ dcl netc_setsockopt entry (fixed bin(31), fixed bin(31), fixed bin(31),
+     pointer, fixed bin(31))
+     returns (fixed bin(31))
+     options (linkage(system)) external ('netc_setsockopt');
+
+ dcl netc_getsockopt entry (fixed bin(31), fixed bin(31), fixed bin(31),
+     pointer, pointer)
+     returns (fixed bin(31))
+     options (linkage(system)) external ('netc_getsockopt');
+
+ /* --- Raw address queries (fill raw sockaddr_in buffer) --- */
+ dcl netc_getpeername entry (fixed bin(31), char(*), pointer)
+     returns (fixed bin(31))
+     options (linkage(system)) external ('netc_getpeername');
+
+ dcl netc_getsockname entry (fixed bin(31), char(*), pointer)
+     returns (fixed bin(31))
+     options (linkage(system)) external ('netc_getsockname');
+
+ /* --- Nonblocking I/O control --- */
+ dcl netc_setnonblock entry (fixed bin(31), fixed bin(31))
+     returns (fixed bin(31))
+     options (linkage(system)) external ('netc_setnonblock');
+
+ /* --- poll(2): single and multi-fd --- */
+ dcl netc_poll entry (fixed bin(31), fixed bin(31), fixed bin(31))
+     returns (fixed bin(31))
+     options (linkage(system)) external ('netc_poll');
+
+ /* Multi-fd poll: fds/ev/revents arrays, nfds count, ms timeout. */
+ dcl netc_poll_multi entry (ptr, ptr, ptr, fixed bin(31), fixed bin(31))
+     returns (fixed bin(31))
+     options (linkage(system)) external ('netc_poll_multi');
+
+ /* --- DNS — raw getaddrinfo wrapper ---
+  * host     - raw host string buffer
+  * hostlen  - effective length of host (PL/I char is blank-padded)
+  * port     - port number (set into sin_port by C in network order)
+  * addr_buf - output buffer for raw struct sockaddr_in (16 bytes) */
+ dcl netc_getaddrinfo entry (char(*), fixed bin(31), fixed bin(31),
+     char(*))
+     returns (fixed bin(31))
+     options (linkage(system)) external ('netc_getaddrinfo');
+
+ /* --- Error --- */
  dcl netc_errno entry ()
      returns (fixed bin(31))
      options (linkage(system)) external ('netc_errno');

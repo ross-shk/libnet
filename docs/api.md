@@ -20,7 +20,7 @@ intercepts with `ON`. `oncode()` recovers the detail.
 |---|---|---|
 | `net_error` | hard error | POSIX errno (always positive) |
 | `net_timeout` | read/write timeout or `EAGAIN`/`EINTR` | `NET_ERR_TIMEOUT` (-3) |
-| `net_eof` | peer closed / end of stream | `NET_ERR_EOF` (-2) |
+| `net_eof` | reserved explicit end-of-stream signal; normal read EOF returns 0 | `NET_ERR_EOF` (-2) |
 | `net_overflow` | caller buffer filled mid-stream | `NET_ERR_OVERFLOW` (-4) |
 
 Pointer-returning functions return the **null handle** on failure (after
@@ -52,16 +52,16 @@ All client procedures take a handle from `net_open` unless noted.
 | `net_connect_finish` | `(h)` | — (call) | `net_error` |
 | `net_close` | `(h)` | — | — |
 | `net_shutdown` | `(h, how)` | — (call) | `net_error` |
-| `net_read` | `(h, buffer)` | byte count | `net_eof`, `net_timeout`, `net_error` |
+| `net_read` | `(h, buffer)` | byte count (0 = peer closed) | `net_timeout`, `net_error` |
 | `net_read_all` | `(h, buffer)` | total count (EOF = normal end, no condition). Accumulates into an internal `CONTROLLED` buffer, then copies into the caller `VARYING` buffer up to its capacity. | `net_timeout`, `net_error`, `net_overflow` (bytes that fit are handed over first) |
-| `net_read_until` | `(h, buffer, delim)` | delimiter position | `net_eof`, `net_timeout`, `net_error`, `net_overflow` |
+| `net_read_until` | `(h, buffer, delim)` | delimiter position (0 = peer closed before delimiter) | `net_timeout`, `net_error`, `net_overflow` |
 | `net_write` | `(h, buffer)` | byte count | `net_timeout`, `net_error` |
 | `net_send` | `(h, buffer, flags)` | byte count | `net_timeout`, `net_error` |
 | `net_send_all` | `(h, buffer)` | total byte count | `net_error` |
 | `net_send_once` | `(h, buffer, flags)` | byte count | `net_timeout`, `net_error` |
 | `net_sendto` | `(h, buffer, ip, port)` | byte count | `net_timeout`, `net_error` (UDP) |
 | `net_recvfrom` | `(h, buffer, ip, port)` | byte count | `net_timeout`, `net_error` (UDP) |
-| `net_poll` | `(h, events, ms)` | ready mask, 0 on timeout | `net_error` |
+| `net_poll` | `(h, events, ms)` | 1 if ready, 0 on timeout | `net_error` |
 | `net_set_timeout` | `(h, rto, wto)` | — (call) | `net_error` |
 | `net_set_nonblocking` | `(h, on)` | — (call) | `net_error` |
 | `net_setopt` | `(h, opt, value)` | — (call) | `net_error` |
@@ -77,6 +77,16 @@ All client procedures take a handle from `net_open` unless noted.
 |---|---|---|---|
 | `net_listen` | `(port, backlog)` | server pointer handle, or null | `net_error` |
 | `net_accept` | `(server, client)` | — (call; sets `client` handle) | `net_error` |
+| `net_poll_multi` | `(server, events, revents, ms)` | ready count, 0 on timeout | `net_error` |
+| `net_server_add_client` | `(server, client)` | — (call; sets `client` handle) | `net_error` |
+| `net_server_nclients` | `(server)` | client count | — |
+| `net_server_client` | `(server, i)` | client handle | — |
+| `net_server_remove_client` | `(server, i)` | — | — |
+
+`net_poll_multi` expects `events` and `revents` to be `fixed bin(31)`
+arrays of at least `NET_MAX_CLIENTS + 1` elements. Index 1 is the server
+socket; index `i + 1` is client `i`. `revents` receives libnet event masks
+(`POLLIN` / `POLLOUT`, plus 4 for error/hangup).
 
 ## Option codes (net_setopt)
 

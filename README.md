@@ -11,6 +11,11 @@
 - **make** — CMake generator backends (Ninja, Unix Makefiles, MSBuild, etc.)
   are all compatible; a working backend is needed automatically
 
+> **Platform note:** the C bridge is portable, but `include/errno.inc` and
+> `include/type_defs.inc` currently contain macOS arm64 socket/errno values.
+> The compiled PL/I layer therefore targets macOS arm64; Linux/Windows need
+> matching constant files.
+
 ## Quick Start
 
 ```bash
@@ -53,8 +58,8 @@ call net_close(conn);
 
 A connection-oriented socket library whose design inverts the usual split:
 
-- **minimal C** (`source/c_bridge.c`): only the raw syscalls PL/I cannot perform — `socket/bind/listen/accept/connect/send/recv/close/shutdown/ settimeout/setnonblock/poll/getpeername` plus an `errno` cache. Reached from PL/I through pli-llvm's by-value C FFI.
-- **most processing in PL/I** (`source/net.pli`, a compiled module): the connection pool, receive buffering, delimiter scanning, retry loops, timeout and error policy — all in PL/I, using `CONTROLLED` storage and pointer handles. The module is archived into `libnet.a` alongside the C bridge, so programs link it like any library instead of `%include`ing the implementation.
+- **minimal C** (`source/c_bridge.c`): only the raw syscalls PL/I cannot perform — `socket/bind/listen/accept/connect/send/recv/sendto/recvfrom/setsockopt/getsockopt/getpeername/getsockname/setnonblock/poll/getaddrinfo/close/shutdown` plus an `errno` cache. Reached from PL/I through pli-llvm's by-value C FFI.
+- **most processing in PL/I** (`source/net.pli`, a compiled module): the connection pool, receive buffering, delimiter scanning, retry loops, timeout and error policy — all in PL/I, using library-owned `BASED` records, `CONTROLLED` receive buffers, and pointer handles. The module is archived into `libnet.a` alongside the C bridge, so programs link it like any library instead of `%include`ing the implementation.
 
 Callers hold only a `POINTER` handle; the connection structure layout is private to the library. This is the classic PL/I "fat runtime / task context" pattern — well-suited to AI-authored PL/I, where a handful of thin PL/I calls replace a page of socket bookkeeping.
 
@@ -62,7 +67,7 @@ Callers hold only a `POINTER` handle; the connection structure layout is private
 
 The PL/I follows classic PL/I conventions:
 
-- `CONTROLLED` connection records declared `ALIGNED` for efficient member access;
+- per-handle `BASED` connection records, so `net_close` frees the exact allocation;
 - a module header (name / author / purpose / calling sequence) atop every include;
 - declarations grouped by kind (parameters, automatic, builtins) and commented by section;
 - errno exposed as `%replace` named constants (`errno.inc`) rather than magic numbers;
@@ -75,7 +80,7 @@ Names follow classic PL/I convention: short meaningful module prefixes, lowercas
 
 | Layer                        | Prefix / form   | Example                                                                 |
 | ---------------------------- | --------------- | ----------------------------------------------------------------------- |
-| C bridge (system primitives) | `netc_`         | `netc_socket`, `netc_recv`, `netc_sockopt`                              |
+| C bridge (system primitives) | `netc_`         | `netc_socket`, `netc_recv`, `netc_setsockopt`                           |
 | Public PL/I procedures       | `net_`          | `net_open`, `net_connect`, `net_read_until`                             |
 | Option codes                 | `NETOPT_*`      | `NETOPT_REUSEADDR`, `NETOPT_KEEPALIVE`, `NETOPT_NODELAY`                |
 | Status codes                 | `NET_ERR_*`     | `NET_ERR_EOF`, `NET_ERR_TIMEOUT`, `NET_ERR_OVERFLOW` (oncode sentinels) |
@@ -173,17 +178,16 @@ test (passing). `cmake --build build` builds the C bridge, then compiles
 %include net;
 dcl conn pointer;
 
-conn = net_open(AF_INET, SOCK_STREAM, 0);        /* library allocates (CONTROLLED) */
+conn = net_open(AF_INET, SOCK_STREAM, 0);        /* library allocates (BASED) */
 call net_connect(conn, '127.0.0.1', 8090);
 call net_setopt(conn, NETOPT_KEEPALIVE, 1);      /* socket options */
 bytes = net_write(conn, 'hello');
-bytes = net_read_until(conn, buf, '0A'x);        /* read a line; net_eof ends it */
-call net_close(conn);                            /* frees (CONTROLLED pop) */
+bytes = net_read_until(conn, buf, '0A'x);        /* read a line; 0 on EOF */
+call net_close(conn);                            /* frees the exact allocation */
 
 /* All failures arrive as conditions; oncode() recovers the detail. */
 on condition(net_error) begin; ... end;
 on condition(net_timeout) begin; ... end;
-on condition(net_eof) begin; ... end;
 on condition(net_overflow) begin; ... end;
 ```
 
@@ -191,19 +195,20 @@ on condition(net_overflow) begin; ... end;
 
 The C bridge and PL/I layer cover the core of what a production socket client or single-client server needs:
 
-- **socket options** — `net_setopt` (`NETOPT_REUSEADDR` / `KEEPALIVE` / `NODELAY`) and `net_set_linger`; platform values live in C, not PL/I;
+- **socket options** — `net_setopt` (`NETOPT_REUSEADDR` / `KEEPALIVE` / `NODELAY`) and `net_set_linger`; platform values live in `include/type_defs.inc` (macOS arm64; Linux values noted);
 - **addresses** — `net_peer` (remote) and `net_local` (bound local addr/port);
-- **DNS** — `net_resolve` (host ↔ dotted quad), plus connect-time resolution;
+- **DNS** — `net_resolve` (host → dotted quad), plus connect-time resolution;
 - **nonblocking connect** — `net_connect_nb` + `net_connect_finish `(`EINPROGRESS` → poll writable → check `SO_ERROR`);
 - **UDP** — `net_sendto` / `net_recvfrom` datagram send/receive;
+- **multi-client servers** — `net_poll_multi` across the server pool, plus `net_server_add_client` / `net_server_client` / `net_server_remove_client` and the `multi_echo_server` example;
 - **errors** — conditions-only model (`net_error` / `net_timeout` / `net_eof` / `net_overflow`), `net_strerror` (full errno text) and `net_errtext`; named errno constants (`errno.inc`).
 
 Still to add for a fully production-grade library (out of current scope):
 
-- **multi-client event loop** — a server must `select`/`poll` across many connections; today only single-fd `net_poll` exists, and the CONTROLLED LIFO pool makes many-outstanding-connections awkward;
+- **event-loop hardening** — per-client partial reads and backpressure; the current `multi_echo_server` example assumes a complete line is available after poll;
 - **connect-timeout orchestration** — wiring `net_connect_nb` + a poll-with-deadline into a single blocking `net_connect_to(h, host, port, ms)`;
 - **TLS** (out of scope; pair libnet with OpenSSL at a higher layer);
-- **thread-safety** — the CONTROLLED pool is per-thread; cross-thread sharing of a handle is not guarded.
+- **thread-safety** — handles are not thread-safe; cross-thread sharing of a connection is not guarded.
 
 ## Error model
 
@@ -214,7 +219,7 @@ A procedure that can fail raises one of these conditions, intercepted with `ON`;
 - `condition net_error` — hard error; `oncode()` = POSIX `errno`.
 - `condition net_timeout` — read/write timeout or `EAGAIN`/`EINTR`;  
 `oncode()` = `NET_ERR_TIMEOUT`.
-- `condition net_eof` — peer closed / end of stream; `oncode()` = `NET_ERR_EOF`.
+- `condition net_eof` — reserved explicit end-of-stream signal; normal read EOF returns 0; `oncode()` = `NET_ERR_EOF`.
 - `condition net_overflow` — caller buffer filled mid-stream;  
 `oncode()` = `NET_ERR_OVERFLOW`.
 

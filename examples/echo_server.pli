@@ -27,7 +27,7 @@
    end; /* on condition(net_timeout) */
    on condition(net_eof) done = '1'b;
 
-   /* Listen on 127.0.0.1:8090 */
+   /* Listen on all interfaces, port 8090 */
    server = net_listen(8090, 5);
    if server = null() then stop;
    put skip list('listening on 8090');
@@ -39,8 +39,10 @@
    /* Echo loop: read a line (net_eof ends it), write it back */
    done = '0'b;
    do while (^done);
+     line = '';
      got = net_read_until(client, line, '0A'x);  /* newline delimiter */
-     if ^done then call net_write(client, line);
+     if got = 0 then done = '1'b;                 /* peer closed */
+     else call net_write(client, line);
    end; /* do while */
 
    call net_close(client);

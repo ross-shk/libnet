@@ -70,8 +70,8 @@
 
  dcl net_poll       entry (pointer, fixed bin(31), fixed bin(31))
     returns (fixed bin(31)) external;
- dcl net_poll_multi entry (pointer, fixed bin(31) controlled,
-    fixed bin(31) controlled, fixed bin(31))
+ dcl net_poll_multi entry (pointer, (*) fixed bin(31),
+    (*) fixed bin(31), fixed bin(31))
     returns (fixed bin(31)) external;
  dcl net_server_add_client entry (pointer, pointer) external;
  dcl net_set_timeout      entry (pointer, fixed bin(31),

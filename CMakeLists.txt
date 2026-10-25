@@ -115,7 +115,7 @@ endif()
 # ------------------------------------------------------ examples (PL/I only)
 if(LIBNET_HAVE_PLI AND LIBNET_BUILD_EXAMPLES)
   set(LIBNET_EXAMPLES
-    echo_server client resolve fetch fetch_dyn http_client
+    echo_server client resolve fetch fetch_dyn http_client multi_echo_server
     test_read_all test_resolve simple_usage)
   set(_example_objs)
   foreach(ex IN LISTS LIBNET_EXAMPLES)
@@ -156,6 +156,15 @@ function(libnet_add_pli_program name src)
     return()
   endif()
   set(_out "${CMAKE_CURRENT_BINARY_DIR}/${name}${CMAKE_EXECUTABLE_SUFFIX}")
+  # On macOS pli-llvm's lld needs -undefined dynamic_lookup so the C bridge's
+  # socket symbols (resolved by dyld at runtime from the host's libSystem)
+  # do not cause a hard link error. PLATFORM_ID checks avoid passing this
+  # flag on Windows (lld-link /MSVC) or Linux.
+  if(APPLE)
+    set(_pli_extra -Wl,-undefined -Wl,dynamic_lookup)
+  else()
+    set(_pli_extra)
+  endif()
   if(WIN32)
     # pli-llvm's lld-link does not understand -L/-l on Windows; pass the full
     # path to the static lib and use /DEFAULTLIB for Winsock.
@@ -176,6 +185,7 @@ function(libnet_add_pli_program name src)
         -I "${CMAKE_CURRENT_SOURCE_DIR}/include"
         -o "${_out}"
         -L "$<TARGET_FILE_DIR:net>" -lnet
+        ${_pli_extra}
       DEPENDS net "${LIBNET_DIST_INC}" "${src}"
       COMMENT "PL/I compiler: linking ${name}"
       VERBATIM)

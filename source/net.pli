@@ -9,31 +9,31 @@
  /*            exported net_* entries and never see the connection */
  /*            layout - they hold only a POINTER handle. */
  /* */
- /* This module uses CONTROLLED storage, char(*), BASED views */
+ /* This module uses BASED records, CONTROLLED buffers, char(*), BASED views */
  /* on procedure parameters, based-member access, and */
  /* variable-length SUBSTR. Compiled once into libnet.a, */
  /* connection logic no longer %included inline into each */
  /* program. */
  /* */
-/* Error handling (conditions-only - the idiomatic PL/I mechanism): */
-  /*   libnet reports ALL failures via conditions, never return codes.*/
-  /*   A returned value is DATA only. A procedure that can fail raises */
-  /*   one of: */
-  /* */
-  /*       condition(net_error)     hard error; oncode() = errno */
-  /*       condition(net_timeout)   timeout / EAGAIN;    oncode() = */
-  /*                           NET_ERR_TIMEOUT */
-  /*       condition(net_overflow)  caller buffer full;  oncode() = */
-  /*                           NET_ERR_OVERFLOW */
-  /* */
-  /* Normal end-of-stream (peer closed) returns 0 from read calls */
-  /* without signaling; callers check return value for EOF. */
-  /* */
-  /* The conditions and NET_ERR_* sentinels are exported so caller */
-  /* ON-units reference them (see include/net.inc, which redeclares */
-  /* them for the caller's scope). */
+ /* Error handling (conditions-only - the idiomatic PL/I mechanism): */
+ /*   libnet reports ALL failures via conditions, never return codes.*/
+ /*   A returned value is DATA only. A procedure that can fail raises */
+ /*   one of: */
+ /* */
+ /*       condition(net_error)     hard error; oncode() = errno */
+ /*       condition(net_timeout)   timeout / EAGAIN;    oncode() = */
+ /*                           NET_ERR_TIMEOUT */
+ /*       condition(net_overflow)  caller buffer full;  oncode() = */
+ /*                           NET_ERR_OVERFLOW */
+ /* */
+ /* Normal end-of-stream (peer closed) returns 0 from read calls */
+ /* without signaling; callers check return value for EOF. */
+ /* */
+ /* The conditions and NET_ERR_* sentinels are exported so caller */
+ /* ON-units reference them (see include/net.inc, which redeclares */
+ /* them for the caller's scope). */
 
-net: package exports(net_open, net_connect, net_dial, net_close,
+ net: package exports(net_open, net_connect, net_dial, net_close,
    net_shutdown, net_read, net_read_all, net_read_until, net_write,
    net_send, net_send_all, net_send_once, net_sendto, net_recvfrom,
    net_poll, net_poll_multi, net_set_timeout, net_set_nonblocking, net_setopt,
@@ -51,6 +51,14 @@ net: package exports(net_open, net_connect, net_dial, net_close,
  %include c_bridge;
 
  /*---------------------------------------------------------------*/
+ /* Module-level constants and conversion helpers                  */
+ /*---------------------------------------------------------------*/
+ %replace HANDLE_CONN   by 1;
+ %replace HANDLE_SERVER by 2;
+
+ dcl digits char(10) init('0123456789');
+
+ /*---------------------------------------------------------------*/
  /* Conditions (the only error channel)                          */
  /*---------------------------------------------------------------*/
  dcl net_error    condition;
@@ -59,13 +67,15 @@ net: package exports(net_open, net_connect, net_dial, net_close,
  dcl net_overflow condition;
 
  /*---------------------------------------------------------------*/
- /* Private connection record (CONTROLLED, library-owned)        */
+ /* Private connection record (BASED allocation, library-owned)  */
  /*---------------------------------------------------------------*/
- /* A connection is a CONTROLLED record. A listening server and an */
- /* accepted client share the same layout. Callers hold only a    */
- /* POINTER handle; each procedure declares a BASED view directly */
- /* on its handle parameter, so no base-pointer copy is needed.  */
+ /* A connection is a BASED record allocated per handle. A server */
+ /* and an accepted client share the same initial layout. Callers */
+ /* hold only a POINTER handle; each procedure declares a BASED   */
+ /* view directly on its handle parameter. The CONTROLLED records */
+ /* below are templates for LIKE and are never allocated directly. */
  dcl 1 conn_rec controlled unaligned,
+    2 kind             fixed bin(31),
     2 fd               fixed bin(31),
     2 is_connected     bit(1),
     2 read_timeout     fixed bin(31),   /* ms; 0 = blocking */
@@ -76,9 +86,10 @@ net: package exports(net_open, net_connect, net_dial, net_close,
     2 in_len           fixed bin(31);   /* bytes currently buffered */
 
  /* Server record with connection pool for multi-client event loop. */
- /* The server's CONTROLLED record includes a fixed array of client */
+ /* The server's BASED record includes a fixed array of client     */
  /* handles (pointers to conn_rec). NET_MAX_CLIENTS is the max.    */
  dcl 1 server_rec controlled unaligned,
+    2 kind             fixed bin(31),
     2 fd               fixed bin(31),
     2 is_connected     bit(1),
     2 read_timeout     fixed bin(31),
@@ -89,6 +100,12 @@ net: package exports(net_open, net_connect, net_dial, net_close,
     2 in_len           fixed bin(31),
     2 n_clients        fixed bin(31),
     2 client_handles   (NET_MAX_CLIENTS) pointer;
+
+ /* Individual allocations: BASED so FREE can target an exact handle. */
+ dcl conn_ptr   pointer;
+ dcl server_ptr pointer;
+ dcl 1 conn_alloc   based(conn_ptr)   like conn_rec;
+ dcl 1 server_alloc based(server_ptr) like server_rec;
 
  /*---------------------------------------------------------------*/
  /* Internal error helpers (raise conditions - the only error    */
@@ -107,11 +124,11 @@ net: package exports(net_open, net_connect, net_dial, net_close,
    signal condition(net_timeout) set oncode(NET_ERR_TIMEOUT);
  end raise_timeout;
 
-/* Raise net_eof (explicit end-of-stream signal; not used for normal
-     read EOF which returns 0). */
-  raise_eof: procedure;
-    signal condition(net_eof) set oncode(NET_ERR_EOF);
-  end raise_eof;
+ /* Raise net_eof (explicit end-of-stream signal; not used for normal
+   read EOF which returns 0). */
+ raise_eof: procedure;
+   signal condition(net_eof) set oncode(NET_ERR_EOF);
+ end raise_eof;
 
  /* Raise net_overflow (caller buffer exhausted mid-stream). */
  raise_overflow: procedure;
@@ -127,17 +144,17 @@ net: package exports(net_open, net_connect, net_dial, net_close,
    if fd <= 0 then signal condition(net_error) set oncode(EBADF);
  end validate_socket;
 
-/* Check recv result; raise appropriate condition on error.
-     Normal EOF (got = 0) is returned as-is without signaling.   */
-  check_recv: procedure (got, fd) returns (fixed bin(31));
-    dcl got fixed bin(31);
-    dcl fd  fixed bin(31);
-    if got < 0 then do;
-      if netc_errno() = EAGAIN then call raise_timeout();
-      else call raise_err();
-    end;
-    return (got);
-  end check_recv;
+ /* Check recv result; raise appropriate condition on error.
+   Normal EOF (got = 0) is returned as-is without signaling.   */
+ check_recv: procedure (got, fd) returns (fixed bin(31));
+   dcl got fixed bin(31);
+   dcl fd  fixed bin(31);
+   if got < 0 then do;
+     if netc_errno() = EAGAIN then call raise_timeout();
+     else call raise_err();
+   end;
+   return (got);
+ end check_recv;
 
  /* Check send result; raise appropriate condition on error. */
  check_send: procedure (n, fd) returns (fixed bin(31));
@@ -157,9 +174,325 @@ net: package exports(net_open, net_connect, net_dial, net_close,
  end check_rc;
 
  /*---------------------------------------------------------------*/
+ /* Internal byte-manipulation helpers                           */
+ /*---------------------------------------------------------------*/
+ /* These procedures replace the removed C glue functions:
+   netc_resolve, netc_sockopt, netc_setlinger, netc_settimeout,
+   netc_strerror, netc_connect_nb, netc_getsockerr.             */
+ /*---------------------------------------------------------------*/
+
+ /* utoa - convert a non-negative fixed binary value to varying text. */
+ utoa: procedure (n) returns (char(10) varying);
+   dcl n fixed bin(31);
+   dcl s char(10) varying;
+
+   if n <= 0 then return ('0');
+   s = '';
+   do while (n > 0);
+     s = substr(digits, mod(n, 10) + 1, 1) || s;
+     n = n / 10;
+   end;
+   return (s);
+ end utoa;
+
+ /* itoa - convert a signed fixed binary value to varying text. */
+ itoa: procedure (n) returns (char(11) varying);
+   dcl n fixed bin(31);
+
+   if n < 0 then return ('-' || utoa(-n));
+   return (utoa(n));
+ end itoa;
+
+ /* rtrim - remove trailing blanks from a varying string. pli-llvm's
+   TRIM keeps the argument's maximum length, so use this explicitly. */
+ rtrim: procedure (s) returns (char(*) varying);
+   dcl s char(*) varying;
+   dcl n fixed bin(31);
+
+   n = length(s);
+   do while (n > 0 & substr(s, n, 1) = ' ');
+     n = n - 1;
+   end;
+   return (substr(s, 1, n));
+ end rtrim;
+
+ /* to_s32 - reinterpret an unsigned 32-bit value as FIXED BIN(31)
+   so assignment to a 4-byte field is in range and does not rely on
+   silent overflow. */
+ to_s32: procedure (v) returns (fixed bin(31));
+   dcl v fixed bin(63);
+
+   if v >= 2147483648 then v = v - 4294967296;
+   return (v);
+ end to_s32;
+
+ /* validate_port - reject values that cannot fit in sin_port. */
+ validate_port: procedure (port);
+   dcl port fixed bin(31);
+
+   if port < 0 | port > 65535 then
+     signal condition(net_error) set oncode(EINVAL);
+ end validate_port;
+
+ /* inet_pton4 - parse a dotted-quad IP string to a unsigned 32-bit
+   value (stored as FIXED BIN(63) to avoid sign issues).
+   Returns the IP as: octet1 + octet2*256 + octet3*65536 + octet4*16777216
+   so that little-endian storage gives bytes [oct1, oct2, oct3, oct4].
+   Raises net_error(EINVAL) on malformed input.                */
+ inet_pton4: procedure (ip_str) returns (fixed bin(63));
+   dcl ip_str char(*) varying;
+   dcl s char(16) varying;
+   dcl n fixed bin(31);
+   dcl pos fixed bin(31);
+   dcl i fixed bin(31);
+   dcl octet fixed bin(31);
+   dcl c char(1);
+   dcl d fixed bin(31);
+   dcl octets(4) fixed bin(31);
+   dcl result fixed bin(63);
+   dcl have_digit bit(1);
+
+   s = rtrim(ip_str);
+   n = length(s);
+   pos = 1;
+   i = 1;
+   octet = 0;
+   have_digit = '0'b;
+
+   do while (i <= 4 & pos <= n);
+     c = substr(s, pos, 1);
+     if c = '.' then do;
+       if ^have_digit then
+         signal condition(net_error) set oncode(EINVAL);
+       octets(i) = octet;
+       i = i + 1;
+       if i > 4 then
+         signal condition(net_error) set oncode(EINVAL);
+       octet = 0;
+       have_digit = '0'b;
+       pos = pos + 1;
+     end;
+     else do;
+       d = index(digits, c);
+       if d = 0 then
+         signal condition(net_error) set oncode(EINVAL);
+       octet = octet * 10 + (d - 1);
+       if octet > 255 then
+         signal condition(net_error) set oncode(EINVAL);
+       have_digit = '1'b;
+       pos = pos + 1;
+     end;
+   end;
+
+   if ^have_digit then
+     signal condition(net_error) set oncode(EINVAL);
+
+   octets(i) = octet;
+
+   if i < 4 then
+     signal condition(net_error) set oncode(EINVAL);
+
+   if pos <= n then
+     signal condition(net_error) set oncode(EINVAL);
+
+   result = octets(1) +
+            octets(2) * 256 +
+            octets(3) * 65536 +
+            octets(4) * 16777216;
+   return (result);
+ end inet_pton4;
+
+ /* inet_ntop4 - format an unsigned 32-bit IP value (FIXED BIN(63))
+   to a dotted-quad string.                    */
+ inet_ntop4: procedure (val) returns (char(16) varying);
+   dcl val fixed bin(63);
+   dcl o1 fixed bin(31);
+   dcl o2 fixed bin(31);
+   dcl o3 fixed bin(31);
+   dcl o4 fixed bin(31);
+   dcl s char(16) varying;
+
+   o1 = mod(val, 256);
+   o2 = mod(val / 256, 256);
+   o3 = mod(val / 65536, 256);
+   o4 = mod(val / 16777216, 256);
+
+   s = utoa(o1) || '.' || utoa(o2) || '.' ||
+       utoa(o3) || '.' || utoa(o4);
+   return (s);
+ end inet_ntop4;
+
+ /* build_sockaddr_in - construct a 16-byte sockaddr_in buffer
+   from an IP string and port. Stores:
+   byte 0:  sin_len    = 16
+   byte 1:  sin_family = AF_INET (2)
+   bytes 2-3: sin_port (big-endian / network order)
+   bytes 4-7: sin_addr (network order from inet_pton4)
+   bytes 8-15: sin_zero (zeros)                */
+ build_sockaddr_in: procedure (ip_str, port, addr_buf);
+   dcl ip_str     char(*) varying;
+   dcl port       fixed bin(31);
+   dcl addr_buf   char(SOCKADDR_IN_SIZE);
+   dcl p          pointer;
+   dcl ip_val     fixed bin(63);
+   dcl port_hi    fixed bin(31);
+   dcl port_lo    fixed bin(31);
+   dcl header     fixed bin(63);
+
+   dcl 1 hdr based(p) unaligned,
+       2 w0 fixed bin(31);
+   dcl 1 ipw based(p) unaligned,
+       2 gap char(4),
+       2 w1 fixed bin(31);
+
+   call validate_port(port);
+   addr_buf = low(SOCKADDR_IN_SIZE);
+   ip_val = inet_pton4(ip_str);
+   port_hi = mod(port / 256, 256);
+   port_lo = mod(port, 256);
+   header = SOCKADDR_IN_SIZE + AF_INET * 256 +
+            port_hi * 65536 + port_lo * 16777216;
+
+   p = addr(addr_buf);
+   hdr.w0 = to_s32(header);
+   p = addr(addr_buf);
+   ipw.w1 = to_s32(ip_val);
+ end build_sockaddr_in;
+
+ /* parse_sockaddr_in - extract IP string and port from a 16-byte
+   sockaddr_in buffer. Port is converted from network to host order. */
+ parse_sockaddr_in: procedure (addr_buf, ip_out, port_out);
+   dcl addr_buf   char(SOCKADDR_IN_SIZE);
+   dcl ip_out     char(16) varying;
+   dcl port_out   fixed bin(31);
+   dcl p          pointer;
+   dcl hdr_val    fixed bin(63);
+   dcl ip_val     fixed bin(63);
+
+   dcl 1 hdr_r based(p) unaligned,
+       2 hdr fixed bin(31);
+   dcl 1 ip_r  based(p) unaligned,
+       2 gap char(4),
+       2 ip  fixed bin(31);
+
+   p = addr(addr_buf);
+   hdr_val = hdr_r.hdr;
+   if hdr_val < 0 then hdr_val = hdr_val + 4294967296;
+
+   p = addr(addr_buf);
+   ip_val = ip_r.ip;
+   if ip_val < 0 then ip_val = ip_val + 4294967296;
+
+   ip_out = inet_ntop4(ip_val);
+   port_out = mod(hdr_val / 65536, 256) * 256 +
+              mod(hdr_val / 16777216, 256);
+ end parse_sockaddr_in;
+
+ /* build_sockaddr_any - construct a 16-byte sockaddr_in for
+   INADDR_ANY (0.0.0.0) on the given port.                */
+ build_sockaddr_any: procedure (port, addr_buf);
+   dcl port     fixed bin(31);
+   dcl addr_buf char(SOCKADDR_IN_SIZE);
+   dcl p        pointer;
+   dcl port_hi  fixed bin(31);
+   dcl port_lo  fixed bin(31);
+   dcl header   fixed bin(63);
+
+   dcl 1 hdr based(p) unaligned,
+       2 w0 fixed bin(31);
+
+   call validate_port(port);
+   addr_buf = low(SOCKADDR_IN_SIZE);
+   port_hi = mod(port / 256, 256);
+   port_lo = mod(port, 256);
+   header = SOCKADDR_IN_SIZE + AF_INET * 256 +
+            port_hi * 65536 + port_lo * 16777216;
+
+   p = addr(addr_buf);
+   hdr.w0 = to_s32(header);
+   /* sin_addr (bytes 4-7) and sin_zero (bytes 8-15) remain zero */
+ end build_sockaddr_any;
+
+ /* build_timeval - construct a 16-byte struct timeval (macOS arm64:
+   8-byte tv_sec + 8-byte tv_usec, little-endian) from milliseconds. */
+ build_timeval: procedure (ms, tv_buf);
+   dcl ms     fixed bin(31);
+   dcl tv_buf char(TIMEVAL_SIZE);
+   dcl p      pointer;
+   dcl sec    fixed bin(63);
+   dcl usec   fixed bin(63);
+
+   dcl 1 tv based(p) unaligned,
+       2 tv_sec  fixed bin(63),
+       2 tv_usec fixed bin(63);
+
+   tv_buf = low(TIMEVAL_SIZE);
+   sec  = ms / 1000;
+   usec = mod(ms, 1000) * 1000;
+   p = addr(tv_buf);
+   tv.tv_sec = sec;
+   tv.tv_usec = usec;
+ end build_timeval;
+
+ /* map_opt - translate a NETOPT_* code to (level, optname) pair.
+   NETOPT_REUSEADDR -> (SOL_SOCKET, SO_REUSEADDR)
+   NETOPT_KEEPALIVE -> (SOL_SOCKET, SO_KEEPALIVE)
+   NETOPT_NODELAY   -> (IPPROTO_TCP, TCP_NODELAY)              */
+ map_opt: procedure (opt, level, optname);
+   dcl opt     fixed bin(31);
+   dcl level   fixed bin(31);
+   dcl optname fixed bin(31);
+
+   select (opt);
+     when (NETOPT_REUSEADDR) do; level = SOL_SOCKET; optname = SO_REUSEADDR; end;
+     when (NETOPT_KEEPALIVE)  do; level = SOL_SOCKET; optname = SO_KEEPALIVE;  end;
+     when (NETOPT_NODELAY)    do; level = IPPROTO_TCP; optname = TCP_NODELAY;  end;
+     otherwise signal condition(net_error) set oncode(EINVAL);
+   end;
+ end map_opt;
+
+ /* net_errtext_val - translate an errno/oncode value to human text.
+   This is the PL/I-only replacement for the removed netc_strerror. */
+ net_errtext_val: procedure (e) returns (char(32) varying);
+   dcl e fixed bin(31);
+
+   if e = 0        then return ('success');
+   if e = NET_ERR_EOF       then return ('end of stream');
+   if e = NET_ERR_TIMEOUT   then return ('timeout');
+   if e = NET_ERR_OVERFLOW  then return ('buffer overflow');
+   select;
+     when (e = EPERM)         return ('operation not permitted');
+     when (e = ENOENT)        return ('no such file or directory');
+     when (e = EINTR)         return ('interrupted');
+     when (e = EBADF)         return ('bad file descriptor');
+     when (e = EAGAIN)        return ('resource temporarily unavailable');
+     when (e = ENOMEM)        return ('out of memory');
+     when (e = EACCES)        return ('permission denied');
+     when (e = EFAULT)        return ('bad address');
+     when (e = EINVAL)        return ('invalid argument');
+     when (e = EPIPE)         return ('broken pipe');
+     when (e = EMFILE)        return ('too many open files');
+     when (e = ENOTSOCK)      return ('socket operation on non-socket');
+     when (e = EMSGSIZE)      return ('message too long');
+     when (e = EADDRINUSE)    return ('address already in use');
+     when (e = EADDRNOTAVAIL) return ('cannot assign requested address');
+     when (e = ENETUNREACH)   return ('network is unreachable');
+     when (e = ECONNRESET)    return ('connection reset by peer');
+     when (e = ENOBUFS)       return ('no buffer space available');
+     when (e = ENOTCONN)      return ('not connected');
+     when (e = ETIMEDOUT)     return ('connection timed out');
+     when (e = ECONNREFUSED)  return ('connection refused');
+     when (e = EHOSTDOWN)     return ('host is down');
+     when (e = EHOSTUNREACH)  return ('no route to host');
+     when (e = EINPROGRESS)   return ('operation now in progress');
+     otherwise                return ('error ' || itoa(e));
+   end;
+ end net_errtext_val;
+
+ /*---------------------------------------------------------------*/
  /* net_open                                                     */
  /*---------------------------------------------------------------*/
- /* Allocate a connection (CONTROLLED push) and create a socket.  */
+ /* Allocate a connection (library-owned BASED record) and create a socket. */
  /*                                                               */
  /* Returns:  a non-null POINTER handle on success;               */
  /*           the null handle on failure (condition net_error     */
@@ -185,16 +518,17 @@ net: package exports(net_open, net_connect, net_dial, net_close,
    end;
 
    /* Allocate and initialize connection record */
-   allocate conn_rec;                /* implicit push - CONTROLLED */
-   conn_rec.fd            = fd;
-   conn_rec.is_connected  = '0'b;
-   conn_rec.read_timeout  = 0;
-   conn_rec.write_timeout = 0;
-   conn_rec.peer_ip       = '';
-   conn_rec.peer_port     = 0;
-   conn_rec.in_len        = 0;
+   allocate conn_alloc set(conn_ptr);
+   conn_alloc.kind          = HANDLE_CONN;
+   conn_alloc.fd            = fd;
+   conn_alloc.is_connected  = '0'b;
+   conn_alloc.read_timeout  = 0;
+   conn_alloc.write_timeout = 0;
+   conn_alloc.peer_ip       = '';
+   conn_alloc.peer_port     = 0;
+   conn_alloc.in_len        = 0;
 
-   h = addr(conn_rec);
+   h = conn_ptr;
    return (h);
  end net_open;
 
@@ -202,6 +536,9 @@ net: package exports(net_open, net_connect, net_dial, net_close,
  /* net_connect / net_dial                                       */
  /*---------------------------------------------------------------*/
  /* Connect an opened connection to host:port.                    */
+ /*                                                               */
+ /* Uses netc_getaddrinfo to resolve the host and build a         */
+ /* sockaddr_in, then calls raw netc_connect.                    */
  /*                                                               */
  /* Raises:   condition(net_error) on connect failure.            */
  /*                                                               */
@@ -212,9 +549,13 @@ net: package exports(net_open, net_connect, net_dial, net_close,
    dcl 1 c  based(h) like conn_rec;
    dcl host char(NET_HOST_MAX) varying;
    dcl port fixed bin(31);
+   dcl addr_buf char(SOCKADDR_IN_SIZE);
    dcl rc   fixed bin(31);
 
-   rc = netc_connect(c.fd, host, length(host), port);
+   call validate_port(port);
+   rc = netc_getaddrinfo(host, length(host), port, addr_buf);
+   call check_rc(rc);
+   rc = netc_connect(c.fd, addr_buf, SOCKADDR_IN_SIZE);
    call check_rc(rc);
    c.is_connected = '1'b;
    c.peer_port    = port;
@@ -243,24 +584,31 @@ net: package exports(net_open, net_connect, net_dial, net_close,
    end;
    hoststr = substr(hostport, 1, colon - 1);
    portstr = substr(hostport, colon + 1, length(hostport) - colon);
-   port    = fixed(trim(portstr));
+   port    = fixed(portstr);
    h = net_open(family, SOCK_STREAM, 0);
    if h = null() then return;
-   call net_connect(h, trim(hoststr), port);
+   call net_connect(h, rtrim(hoststr), port);
  end net_dial;
 
  /*---------------------------------------------------------------*/
  /* net_close / net_shutdown                                     */
  /*---------------------------------------------------------------*/
- /* Close connection and free controlled storage.                 */
+ /* Close connection and free its exact BASED allocation.         */
  net_close: procedure (h);
    dcl h   pointer;
    dcl 1 c based(h) like conn_rec;
+
+   if h = null() then return;
    if c.fd > 0 then call netc_close(c.fd);
-   c.fd            = 0;
-   c.is_connected  = '0'b;
-   c.in_len        = 0;
-   free conn_rec;                    /* CONTROLLED pop */
+   c.fd           = 0;
+   c.is_connected = '0'b;
+   c.in_len       = 0;
+
+   /* Free the record matching this handle, not a CONTROLLED LIFO top. */
+   if c.kind = HANDLE_SERVER then
+     free h -> server_alloc;
+   else
+     free h -> conn_alloc;
  end net_close;
 
  /* Shut down one direction of the connection.                      */
@@ -274,17 +622,17 @@ net: package exports(net_open, net_connect, net_dial, net_close,
    call check_rc(rc);
  end net_shutdown;
 
-/*---------------------------------------------------------------*/
-  /* net_read family                                              */
-  /*---------------------------------------------------------------*/
-  /* Read up to buflen bytes into buffer.                          */
-  /*                                                                   */
-  /* Returns:  the number of bytes read (0 = peer closed,           */
-  /*           >0 = bytes read).                                   */
-  /*                                                                   */
-  /* Raises:   condition(net_timeout) on timeout/EAGAIN;             */
-  /*           condition(net_error) on a hard error.                 */
-  net_read: procedure (h, buffer) returns (fixed bin(31));
+ /*-------------------------------------------------------------------*/
+ /* net_read family                                              */
+ /*-------------------------------------------------------------------*/
+ /* Read up to buflen bytes into buffer.                          */
+ /*                                                                   */
+ /* Returns:  the number of bytes read (0 = peer closed,           */
+ /*           >0 = bytes read).                                   */
+ /*                                                                   */
+ /* Raises:   condition(net_timeout) on timeout/EAGAIN;             */
+ /*           condition(net_error) on a hard error.                 */
+ net_read: procedure (h, buffer) returns (fixed bin(31));
    dcl h      pointer;
    dcl 1 c    based(h) like conn_rec;
    dcl buffer char(NET_BUF_CAP) varying;
@@ -299,14 +647,14 @@ net: package exports(net_open, net_connect, net_dial, net_close,
    return (got);
  end net_read;
 
-/* Read everything from conn into a dynamically allocated CONTROLLED
-     buffer. The caller provides a char(*) varying controlled variable
-     which this procedure allocates and grows as needed. No fixed size
-     limit - response can be truly arbitrary length.
-     conn   : open connection
-     buffer : caller's controlled buffer (allocated by this procedure)
-     Returns the number of bytes read (0 = peer closed).
-     Raises net_error on hard error, net_timeout on EAGAIN. */
+ /* Read everything from conn into a dynamically allocated CONTROLLED
+   buffer. The caller provides a char(*) varying controlled variable
+   which this procedure allocates and grows as needed. No fixed size
+   limit - response can be truly arbitrary length.
+   conn   : open connection
+   buffer : caller's controlled buffer (allocated by this procedure)
+   Returns the number of bytes read (0 = peer closed).
+   Raises net_error on hard error, net_timeout on EAGAIN. */
  net_read_all: procedure (conn, buffer) returns (fixed bin(31));
    dcl conn    pointer;
    dcl 1 c     based(conn) like conn_rec;
@@ -322,7 +670,7 @@ net: package exports(net_open, net_connect, net_dial, net_close,
    /* Allocate initial controlled buffer */
    allocate buffer (cap) character varying;
 
- /* Read in chunks using net_read, growing string as needed */
+   /* Read in chunks using net_read, growing string as needed */
    do while ('1'b);
      chunk_len = net_read(conn, chunk);
      if chunk_len = 0 then leave;  /* EOF */
@@ -365,15 +713,15 @@ net: package exports(net_open, net_connect, net_dial, net_close,
    return (total_len);
  end net_read_all;
 
-/* Read until a delimiter character is seen, appending               */
-  /* received bytes to buffer.                                         */
-  /*                                                                   */
-  /* Returns:  the position of the first delimiter in buffer (1..len). */
-  /*           Returns 0 if peer closed before delimiter (EOF).        */
-  /*                                                                   */
-  /* Raises:   condition(net_timeout), condition(net_error), or        */
-  /*           condition(net_overflow) if the caller buffer filled.    */
-  net_read_until: procedure (h, buffer, delim) returns (fixed bin(31));
+ /* Read until a delimiter character is seen, appending            */
+ /* received bytes to buffer.                                     */
+ /*                                                                   */
+ /* Returns:  the position of the first delimiter in buffer (1..len). */
+ /*           Returns 0 if peer closed before delimiter (EOF).        */
+ /*                                                                   */
+ /* Raises:   condition(net_timeout), condition(net_error), or        */
+ /*           condition(net_overflow) if the caller buffer filled.    */
+ net_read_until: procedure (h, buffer, delim) returns (fixed bin(31));
    dcl h      pointer;
    dcl 1 c    based(h) like conn_rec;
    dcl buffer char(NET_BUF_CAP) varying;
@@ -410,14 +758,14 @@ net: package exports(net_open, net_connect, net_dial, net_close,
  end net_read_until;
 
  /*-------------------------------------------------------------------*/
- /* net_write / net_send family                                       */
+ /* net_write / net_send family                                      */
  /*-------------------------------------------------------------------*/
- /* Send buffer verbatim (flags = 0).                                 */
+ /* Send buffer verbatim (flags = 0).                                */
  /*                                                                   */
  /* Returns:  the number of bytes sent (0 <= n <= length(buffer)).    */
  /*                                                                   */
- /* Raises:   condition(net_timeout) on timeout/EAGAIN;               */
- /*           condition(net_error) on a hard error.                   */
+ /* Raises:   condition(net_timeout) on timeout/EAGAIN;             */
+ /*           condition(net_error) on a hard error.                 */
  net_write: procedure (h, buffer) returns (fixed bin(31));
    dcl h      pointer;
    dcl 1 c    based(h) like conn_rec;
@@ -439,9 +787,9 @@ net: package exports(net_open, net_connect, net_dial, net_close,
    return (check_send(n, c.fd));
  end net_send;
 
- /* Send the whole buffer, retrying on partial sends.                 */
+ /* Send the whole buffer, retrying on partial sends.              */
  /*                                                                   */
- /* Returns:  the total number of bytes sent.                         */
+ /* Returns:  the total number of bytes sent.                        */
  /*                                                                   */
  /* Raises:   condition(net_error) on a hard (non-EAGAIN) error.      */
  net_send_all: procedure (h, buffer) returns (fixed bin(31));
@@ -466,9 +814,9 @@ net: package exports(net_open, net_connect, net_dial, net_close,
    return (total);
  end net_send_all;
 
- /* A single send() with optional flags; no retry.                    */
+ /* A single send() with optional flags; no retry.                */
  /*                                                                   */
- /* Returns:  the number of bytes sent.                               */
+ /* Returns:  the number of bytes sent.                              */
  /*                                                                   */
  /* Raises:   condition(net_timeout) / condition(net_error).          */
  net_send_once: procedure (h, buffer, flags) returns (fixed bin(31));
@@ -483,15 +831,14 @@ net: package exports(net_open, net_connect, net_dial, net_close,
  end net_send_once;
 
  /*-------------------------------------------------------------------*/
- /* net_poll / net_set_timeout / net_set_nonblocking                  */
+ /* net_poll / net_set_timeout / net_set_nonblocking                 */
  /*-------------------------------------------------------------------*/
- /* Poll for readiness.                                               */
- /*                                                                   */
- /* Returns:  the ready mask (POLLIN/POLLOUT), or 0 on timeout. A     */
- /*           timeout is NOT an error for poll - it is the normal     */
- /*           "nothing ready" result.                                 */
- /*                                                                   */
- /* Raises:   condition(net_error) on a hard error.                   */
+ /* Poll for readiness.                                              */
+ /*                                                                  */
+ /* Returns:  1 if ready, 0 on timeout. A timeout is NOT an error     */
+ /*           for poll - it is the normal "nothing ready" result.    */
+ /*                                                                  */
+ /* Raises:   condition(net_error) on a hard error.                 */
  net_poll: procedure (h, events, ms) returns (fixed bin(31));
    dcl h      pointer;
    dcl 1 c    based(h) like conn_rec;
@@ -504,28 +851,23 @@ net: package exports(net_open, net_connect, net_dial, net_close,
    return (r);
  end net_poll;
 
- /* Multi-fd poll across a server's connection pool.                  */
- /*                                                                   */
- /* server   - server handle (from net_listen)                        */
- /* events   - array of event masks to watch per fd (extent           */
- /*            n_clients+1). Index 1 is the server socket, indices    */
- /*            2..n_clients+1 are the pool entries.                   */
- /*            (POLLIN=1, POLLOUT=2). Caller allocates as             */
- /*            fixed bin(31) controlled with dimension n_clients+1.   */
- /* revents  - array of returned event masks (same codes + 4=error)   */
- /* ms       - timeout in milliseconds (-1 = infinite)                */
- /*                                                                   */
- /* Returns:  the number of ready fds, or 0 on timeout.               */
- /*           On error raises condition(net_error).                   */
- /*                                                                   */
- /* The server's client pool is used; events/revents arrays must have */
- /* at least s.n_clients+1 elements. Index 1 = server socket,         */
- /* indices 2..n_clients+1 = the pool entries.                        */
+ /* Multi-fd poll across a server's connection pool.                */
+ /*                                                                 */
+ /* server   - server handle (from net_listen)                      */
+ /* events   - fixed bin(31) array of event masks (POLLIN=1,        */
+ /*            POLLOUT=2), at least NET_MAX_CLIENTS+1 elements.     */
+ /*            Index 1 is the server socket; indices 2..n+1 are     */
+ /*            the pool entries.                                    */
+ /* revents  - array of returned event masks (same codes + 4=error) */
+ /* ms       - timeout in milliseconds (-1 = infinite)              */
+ /*                                                                 */
+ /* Returns:  the number of ready fds, or 0 on timeout.             */
+ /*           On error raises condition(net_error).                 */
  net_poll_multi: procedure (server, events, revents, ms)
-     returns (fixed bin(31));
+    returns (fixed bin(31));
    dcl server  pointer;
-   dcl events  fixed bin(31) controlled;
-   dcl revents fixed bin(31) controlled;
+   dcl events(*) fixed bin(31);
+   dcl revents(*) fixed bin(31);
    dcl ms      fixed bin(31);
    dcl 1 s     based(server) like server_rec;
    dcl fds     fixed bin(31) controlled;
@@ -535,8 +877,6 @@ net: package exports(net_open, net_connect, net_dial, net_close,
    dcl 1 c     based like conn_rec;
 
    n = s.n_clients + 1;  /* +1 for server socket */
-   if s.n_clients <= 0 then return (0);
-
    allocate fds (n);
    /* Index 1 = server socket */
    fds(1) = s.fd;
@@ -555,24 +895,31 @@ net: package exports(net_open, net_connect, net_dial, net_close,
    return (r);
  end net_poll_multi;
 
- /* Set read/write timeouts (ms; 0 = blocking).                       */
- /* Raises:   condition(net_error) on failure.                        */
+ /* Set read/write timeouts (ms; 0 = blocking).                    */
+ /* Builds a struct timeval in PL/I, passes via netc_setsockopt.    */
+ /* Raises:   condition(net_error) on failure.                      */
  net_set_timeout: procedure (h, rto, wto);
    dcl h   pointer;
    dcl 1 c based(h) like conn_rec;
    dcl rto fixed bin(31);
    dcl wto fixed bin(31);
-   dcl rc  fixed bin(31);
+   dcl tv_buf char(TIMEVAL_SIZE);
+   dcl rc    fixed bin(31);
 
-   rc = netc_settimeout(c.fd, rto, wto);
+   call build_timeval(rto, tv_buf);
+   rc = netc_setsockopt(c.fd, SOL_SOCKET, SO_RCVTIMEO, addr(tv_buf), TIMEVAL_SIZE);
+   call check_rc(rc);
+
+   call build_timeval(wto, tv_buf);
+   rc = netc_setsockopt(c.fd, SOL_SOCKET, SO_SNDTIMEO, addr(tv_buf), TIMEVAL_SIZE);
    call check_rc(rc);
 
    c.read_timeout  = rto;
    c.write_timeout = wto;
  end net_set_timeout;
 
- /* Enable or disable nonblocking I/O.                                */
- /* Raises:   condition(net_error) on failure.                        */
+ /* Enable or disable nonblocking I/O.                            */
+ /* Raises:   condition(net_error) on failure.                      */
  net_set_nonblocking: procedure (h, on);
    dcl h  pointer;
    dcl 1 c based(h) like conn_rec;
@@ -590,28 +937,49 @@ net: package exports(net_open, net_connect, net_dial, net_close,
  /*-------------------------------------------------------------------*/
  /* Set a socket option by libnet code (NETOPT_REUSEADDR /            */
  /* NETOPT_KEEPALIVE / NETOPT_NODELAY). value is 0 (off) or 1 (on).   */
+ /* Uses map_opt to translate NETOPT_* to (level, optname), then      */
+ /* calls raw netc_setsockopt with an int value.                    */
  /* Raises:   condition(net_error) on failure.                        */
  net_setopt: procedure (h, opt, value);
    dcl h     pointer;
    dcl 1 c   based(h) like conn_rec;
    dcl opt   fixed bin(31);
    dcl value fixed bin(31);
-   dcl rc    fixed bin(31);
+   dcl level   fixed bin(31);
+   dcl optname fixed bin(31);
+   dcl rc      fixed bin(31);
 
-   rc = netc_sockopt(c.fd, opt, value);
+   call map_opt(opt, level, optname);
+   rc = netc_setsockopt(c.fd, level, optname, addr(value), 4);
    call check_rc(rc);
  end net_setopt;
 
  /* SO_LINGER: enable/disable with a timeout in seconds.              */
+ /* Builds struct linger in PL/I (8 bytes: two int fields), passes    */
+ /* via netc_setsockopt.                                              */
  /* Raises:   condition(net_error) on failure.                        */
  net_set_linger: procedure (h, on, seconds);
    dcl h       pointer;
    dcl 1 c     based(h) like conn_rec;
    dcl on      fixed bin(31);
    dcl seconds fixed bin(31);
-   dcl rc      fixed bin(31);
+   dcl linger_buf char(LINGER_SIZE);
+   dcl p        pointer;
+   dcl optval   fixed bin(31);
+   dcl rc       fixed bin(31);
 
-   rc = netc_setlinger(c.fd, on, seconds);
+   dcl 1 linger based(p) unaligned,
+       2 l_onoff  fixed bin(31),
+       2 l_linger fixed bin(31);
+
+   linger_buf = low(LINGER_SIZE);
+   if on then optval = 1;
+   else       optval = 0;
+   p = addr(linger_buf);
+   linger.l_onoff = optval;
+   linger.l_linger = seconds;
+
+   rc = netc_setsockopt(c.fd, SOL_SOCKET, SO_LINGER, addr(linger_buf), LINGER_SIZE);
    call check_rc(rc);
  end net_set_linger;
 
@@ -619,18 +987,22 @@ net: package exports(net_open, net_connect, net_dial, net_close,
  /* net_peer / net_local                                              */
  /*-------------------------------------------------------------------*/
  /* Fill ip/port with the peer (remote) address.                      */
+ /* Calls netc_getpeername to fill a raw sockaddr_in, then parses    */
+ /* it in PL/I.                                                      */
  /* Raises:   condition(net_error) on failure.                        */
  net_peer: procedure (h, ip, port);
    dcl h    pointer;
    dcl 1 c  based(h) like conn_rec;
    dcl ip   char(16) varying;
    dcl port fixed bin(31);
+   dcl addr_buf char(SOCKADDR_IN_SIZE);
+   dcl addrlen fixed bin(31);
    dcl rc   fixed bin(31);
-   dcl tmp  char(16);
 
-   rc = netc_getpeername(c.fd, tmp, 16, addr(port));
+   addrlen = SOCKADDR_IN_SIZE;
+   rc = netc_getpeername(c.fd, addr_buf, addr(addrlen));
    call check_rc(rc);
-   ip = trim(tmp);
+   call parse_sockaddr_in(addr_buf, ip, port);
  end net_peer;
 
  /* Fill ip/port with the local (bound) address.                      */
@@ -640,42 +1012,44 @@ net: package exports(net_open, net_connect, net_dial, net_close,
    dcl 1 c  based(h) like conn_rec;
    dcl ip   char(16) varying;
    dcl port fixed bin(31);
+   dcl addr_buf char(SOCKADDR_IN_SIZE);
+   dcl addrlen fixed bin(31);
    dcl rc   fixed bin(31);
-   dcl tmp  char(16);
 
-   rc = netc_getsockname(c.fd, tmp, 16, addr(port));
+   addrlen = SOCKADDR_IN_SIZE;
+   rc = netc_getsockname(c.fd, addr_buf, addr(addrlen));
    call check_rc(rc);
-   ip = trim(tmp);
+   call parse_sockaddr_in(addr_buf, ip, port);
  end net_local;
 
  /*-------------------------------------------------------------------*/
  /* net_resolve                                                       */
  /*-------------------------------------------------------------------*/
  /* Resolve a host name (or dotted quad) to a dotted-quad string      */
- /* in ip.                                                            */
+ /* in ip. Uses netc_getaddrinfo (raw getaddrinfo) + parse_sockaddr.  */
  /* Raises:   condition(net_error) on resolution failure.             */
  net_resolve: procedure (host, ip);
    dcl host char(NET_HOST_MAX) varying;
    dcl ip   char(16) varying;
+   dcl addr_buf char(SOCKADDR_IN_SIZE);
    dcl rc   fixed bin(31);
-   dcl tmp  char(16);
+   dcl dummy_port fixed bin(31);
 
-   rc = netc_resolve(host, length(host), tmp, 16);
+   rc = netc_getaddrinfo(host, length(host), 0, addr_buf);
    call check_rc(rc);
-   ip = trim(tmp);
+   call parse_sockaddr_in(addr_buf, ip, dummy_port);
  end net_resolve;
 
  /*-------------------------------------------------------------------*/
  /* net_strerror                                                      */
  /*-------------------------------------------------------------------*/
  /* Human-readable text for an errno value, into buf.                 */
+ /* Pure PL/I (replaces removed netc_strerror). Uses net_errtext_val. */
  net_strerror: procedure (e, buf);
    dcl e   fixed bin(31);
    dcl buf char(NET_BUF_CAP) varying;
-   dcl tmp char(NET_BUF_CAP);
 
-   call netc_strerror(e, tmp, NET_BUF_CAP);
-   buf = trim(tmp);
+   buf = net_errtext_val(e);
  end net_strerror;
 
  /*-------------------------------------------------------------------*/
@@ -687,23 +1061,32 @@ net: package exports(net_open, net_connect, net_dial, net_close,
  /* polls for writability and then calls net_connect_finish. No       */
  /* condition is raised for in-progress (it is not an error).         */
  /*                                                                   */
+ /* Uses netc_setnonblock + netc_getaddrinfo + netc_connect.          */
  /* Raises:   condition(net_error) on a hard connect failure.         */
  net_connect_nb: procedure (h, host, port);
    dcl h    pointer;
    dcl 1 c  based(h) like conn_rec;
    dcl host char(NET_HOST_MAX) varying;
    dcl port fixed bin(31);
+   dcl addr_buf char(SOCKADDR_IN_SIZE);
    dcl rc   fixed bin(31);
 
-   call netc_setnonblock(c.fd, 1);
+   call validate_port(port);
+   rc = netc_setnonblock(c.fd, 1);
+   call check_rc(rc);
 
-   rc = netc_connect_nb(c.fd, host, length(host), port);
+   rc = netc_getaddrinfo(host, length(host), port, addr_buf);
+   call check_rc(rc);
+
+   call netc_clearerr();
+   rc = netc_connect(c.fd, addr_buf, SOCKADDR_IN_SIZE);
    if rc = 0 then do;
      c.is_connected = '1'b;
      c.peer_port    = port;
      return;
    end;
-   if rc = -1 then do;                 /* EINPROGRESS */
+   /* EINPROGRESS (POSIX) and EAGAIN (Winsock) are normal here. */
+   if netc_errno() = EINPROGRESS | netc_errno() = EAGAIN then do;
      call netc_clearerr();
      return;
    end;
@@ -711,16 +1094,27 @@ net: package exports(net_open, net_connect, net_dial, net_close,
  end net_connect_nb;
 
  /* Finalize a nonblocking connect after the fd became writable.      */
+ /* Uses netc_getsockopt with SO_ERROR to check the result.          */
  /* Raises:   condition(net_error) if the connect ultimately failed.  */
  net_connect_finish: procedure (h);
    dcl h  pointer;
    dcl 1 c based(h) like conn_rec;
    dcl e  fixed bin(31);
+   dcl elen fixed bin(31);
+   dcl err_buf char(4);
+   dcl p  pointer;
    dcl rc fixed bin(31);
 
-   e = 0;
-   rc = netc_getsockerr(c.fd, addr(e));
+   dcl 1 err_view based(p) unaligned,
+       2 err_val fixed bin(31);
+
+   elen = 4;
+   rc = netc_getsockopt(c.fd, SOL_SOCKET, SO_ERROR, addr(err_buf), addr(elen));
    call check_rc(rc);
+
+   p = addr(err_buf);
+   e = err_view.err_val;
+   if e < 0 then e = e + 4294967296;
 
    if e ^= 0 then do;
      signal condition(net_error) set oncode(e);
@@ -734,6 +1128,7 @@ net: package exports(net_open, net_connect, net_dial, net_close,
  /* UDP datagrams                                                     */
  /*-------------------------------------------------------------------*/
  /* Send a datagram to ip:port on this (datagram) connection.         */
+ /* Builds a sockaddr_in in PL/I and calls raw netc_sendto.          */
  /*                                                                   */
  /* Returns:  the number of bytes sent.                               */
  /*                                                                   */
@@ -745,18 +1140,20 @@ net: package exports(net_open, net_connect, net_dial, net_close,
    dcl buffer char(NET_BUF_CAP) varying;
    dcl ip     char(16) varying;
    dcl port   fixed bin(31);
+   dcl addr_buf char(SOCKADDR_IN_SIZE);
    dcl n      fixed bin(31);
 
-   n = netc_sendto(c.fd, buffer, length(buffer), 0,
-                   ip, length(ip), port);
+   call build_sockaddr_in(ip, port, addr_buf);
+   n = netc_sendto(c.fd, buffer, length(buffer), 0, addr_buf, SOCKADDR_IN_SIZE);
    return (check_send(n, c.fd));
  end net_sendto;
 
  /* Receive a datagram; the sender's address is returned in ip/port.  */
+ /* Calls raw netc_recvfrom, then parses the sockaddr_in in PL/I.    */
  /*                                                                   */
  /* Returns:  the number of bytes received.                           */
  /*                                                                   */
- /* Raises:   condition(net_timeout) on EAGAIN; condition(net_error)  */
+ /* Raises:   condition(net_timeout) on EAGAIN; condition(net_error) */
  /*           otherwise.                                              */
  net_recvfrom: procedure (h, buffer, ip, port) returns (fixed bin(31));
    dcl h      pointer;
@@ -766,9 +1163,11 @@ net: package exports(net_open, net_connect, net_dial, net_close,
    dcl port   fixed bin(31);
    dcl n      fixed bin(31);
    dcl rbuf   char(NET_BUF_CAP);
-   dcl raddr  char(16);
+   dcl raddr  char(SOCKADDR_IN_SIZE);
+   dcl rlen   fixed bin(31);
 
-   n = netc_recvfrom(c.fd, rbuf, NET_BUF_CAP, 0, raddr, 16, addr(port));
+   rlen = SOCKADDR_IN_SIZE;
+   n = netc_recvfrom(c.fd, rbuf, NET_BUF_CAP, 0, raddr, addr(rlen));
    if n < 0 then do;
      if netc_errno() = EAGAIN then call raise_timeout();
      else call raise_err();
@@ -778,7 +1177,7 @@ net: package exports(net_open, net_connect, net_dial, net_close,
    /* A zero-length datagram is valid data, not EOF */
    if n > 0 then buffer = substr(rbuf, 1, n);
    else buffer = '';
-   ip = trim(raddr);
+   call parse_sockaddr_in(raddr, ip, port);
 
    return (n);
  end net_recvfrom;
@@ -787,11 +1186,16 @@ net: package exports(net_open, net_connect, net_dial, net_close,
  /* Server API: net_listen / net_accept                               */
  /*-------------------------------------------------------------------*/
  /* Bind to port and listen. Returns a server handle (POINTER).       */
+ /* Uses build_sockaddr_any to construct an INADDR_ANY bind address   */
+ /* in PL/I, then calls raw netc_bind + netc_listen.                 */
  net_listen: procedure (port, backlog) returns (pointer);
    dcl port    fixed bin(31);
    dcl backlog fixed bin(31);
    dcl fd      fixed bin(31);
    dcl h       pointer;
+   dcl addr_buf char(SOCKADDR_IN_SIZE);
+   dcl rc      fixed bin(31);
+   dcl one     fixed bin(31) init(1);
 
    fd = netc_socket(AF_INET, SOCK_STREAM, 0);
    if fd < 0 then do;
@@ -799,31 +1203,43 @@ net: package exports(net_open, net_connect, net_dial, net_close,
      return (null());
    end;
 
-   if netc_bind(fd, port) < 0 then do;
+   /* Allow immediate restart while old connections sit in TIME_WAIT. */
+   rc = netc_setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, addr(one), 4);
+
+   call build_sockaddr_any(port, addr_buf);
+   rc = netc_bind(fd, addr_buf, SOCKADDR_IN_SIZE);
+   if rc < 0 then do;
      call raise_err();
      call netc_close(fd);
      return (null());
    end;
 
-   if netc_listen(fd, backlog) < 0 then do;
+   rc = netc_listen(fd, backlog);
+   if rc < 0 then do;
      call raise_err();
      call netc_close(fd);
      return (null());
    end;
 
-   /* Make server socket non-blocking for use with poll() */
-   call netc_setnonblock(fd, 1);
+   /* Make server socket non-blocking for use with poll(). */
+   rc = netc_setnonblock(fd, 1);
+   if rc < 0 then do;
+     call netc_close(fd);
+     call raise_err();
+     return (null());
+   end;
 
-   allocate server_rec;
-   server_rec.fd            = fd;
-   server_rec.is_connected  = '1'b;
-   server_rec.read_timeout  = 0;
-   server_rec.write_timeout = 0;
-   server_rec.peer_ip       = '';
-   server_rec.peer_port     = 0;
-   server_rec.in_len        = 0;
-   server_rec.n_clients     = 0;
-   h = addr(server_rec);
+   allocate server_alloc set(server_ptr);
+   server_alloc.kind          = HANDLE_SERVER;
+   server_alloc.fd            = fd;
+   server_alloc.is_connected  = '1'b;
+   server_alloc.read_timeout  = 0;
+   server_alloc.write_timeout = 0;
+   server_alloc.peer_ip       = '';
+   server_alloc.peer_port     = 0;
+   server_alloc.in_len        = 0;
+   server_alloc.n_clients     = 0;
+   h = server_ptr;
 
    return (h);
  end net_listen;
@@ -836,11 +1252,24 @@ net: package exports(net_open, net_connect, net_dial, net_close,
    dcl client pointer;
    dcl 1 s    based(server) like server_rec;
    dcl cfd    fixed bin(31);
+   dcl rc     fixed bin(31);
 
-   cfd = netc_accept(s.fd);
-   if cfd < 0 then do;
-     call raise_err();
-     return;
+   /* The listening socket is non-blocking: wait for a connection. */
+   do while ('1'b);
+     cfd = netc_accept(s.fd);
+     if cfd >= 0 then leave;
+     if netc_errno() = EAGAIN then do;
+       call netc_clearerr();
+       rc = netc_poll(s.fd, POLLIN, -1);
+       if rc < 0 then do;
+         call raise_err();
+         return;
+       end;
+     end;
+     else do;
+       call raise_err();
+       return;
+     end;
    end;
 
    if s.n_clients >= NET_MAX_CLIENTS then do;
@@ -849,15 +1278,24 @@ net: package exports(net_open, net_connect, net_dial, net_close,
      return;
    end;
 
-   allocate conn_rec;
-   conn_rec.fd            = cfd;
-   conn_rec.is_connected  = '1'b;
-   conn_rec.read_timeout  = 0;
-   conn_rec.write_timeout = 0;
-   conn_rec.peer_ip       = '';
-   conn_rec.peer_port     = 0;
-   conn_rec.in_len        = 0;
-   client = addr(conn_rec);
+   /* macOS accept inherits O_NONBLOCK from the listening socket. */
+   rc = netc_setnonblock(cfd, 0);
+   if rc < 0 then do;
+     call netc_close(cfd);
+     call raise_err();
+     return;
+   end;
+
+   allocate conn_alloc set(conn_ptr);
+   conn_alloc.kind          = HANDLE_CONN;
+   conn_alloc.fd            = cfd;
+   conn_alloc.is_connected  = '1'b;
+   conn_alloc.read_timeout  = 0;
+   conn_alloc.write_timeout = 0;
+   conn_alloc.peer_ip       = '';
+   conn_alloc.peer_port     = 0;
+   conn_alloc.in_len        = 0;
+   client = conn_ptr;
 
    s.n_clients = s.n_clients + 1;
    s.client_handles(s.n_clients) = client;
@@ -875,85 +1313,89 @@ net: package exports(net_open, net_connect, net_dial, net_close,
    dcl client pointer;
    dcl 1 s    based(server) like conn_rec;
    dcl cfd    fixed bin(31);
+   dcl rc     fixed bin(31);
 
-   cfd = netc_accept(s.fd);
-   if cfd < 0 then do;
+   /* The listening socket is non-blocking: wait for a connection. */
+   do while ('1'b);
+     cfd = netc_accept(s.fd);
+     if cfd >= 0 then leave;
+     if netc_errno() = EAGAIN then do;
+       call netc_clearerr();
+       rc = netc_poll(s.fd, POLLIN, -1);
+       if rc < 0 then do;
+         call raise_err();
+         return;
+       end;
+     end;
+     else do;
+       call raise_err();
+       return;
+     end;
+   end;
+
+   /* macOS accept inherits O_NONBLOCK from the listening socket. */
+   rc = netc_setnonblock(cfd, 0);
+   if rc < 0 then do;
+     call netc_close(cfd);
      call raise_err();
      return;
    end;
 
-   allocate conn_rec;
-   conn_rec.fd            = cfd;
-   conn_rec.is_connected  = '1'b;
-   conn_rec.read_timeout  = 0;
-   conn_rec.write_timeout = 0;
-   conn_rec.peer_ip       = '';
-   conn_rec.peer_port     = 0;
-   conn_rec.in_len        = 0;
-   client = addr(conn_rec);
+   allocate conn_alloc set(conn_ptr);
+   conn_alloc.kind          = HANDLE_CONN;
+   conn_alloc.fd            = cfd;
+   conn_alloc.is_connected  = '1'b;
+   conn_alloc.read_timeout  = 0;
+   conn_alloc.write_timeout = 0;
+   conn_alloc.peer_ip       = '';
+   conn_alloc.peer_port     = 0;
+   conn_alloc.in_len        = 0;
+   client = conn_ptr;
  end net_accept;
 
  /*-------------------------------------------------------------------*/
  /* net_errtext                                                       */
  /*-------------------------------------------------------------------*/
  /* Translate the current oncode() into a human-readable string.      */
+ /* Delegates to net_errtext_val.                                     */
  net_errtext: procedure returns (char(32));
    dcl e fixed bin(31);
 
    e = oncode();
-   if e = 0        then return ('success');
-   if e = NET_ERR_EOF       then return ('end of stream');
-   if e = NET_ERR_TIMEOUT   then return ('timeout');
-   if e = NET_ERR_OVERFLOW  then return ('buffer overflow');
-   select;
-     when (e = EINTR)         return ('interrupted');
-     when (e = EBADF)         return ('bad file descriptor');
-     when (e = EAGAIN)        return ('try again (EAGAIN)');
-     when (e = EACCES)        return ('permission denied');
-     when (e = EFAULT)        return ('bad address');
-     when (e = EINVAL)        return ('invalid argument');
-     when (e = EPIPE)         return ('broken pipe');
-     when (e = ENOTCONN)      return ('not connected');
-     when (e = ECONNRESET)    return ('connection reset');
-     when (e = ETIMEDOUT)     return ('connection timed out');
-     when (e = ECONNREFUSED)  return ('connection refused');
-     when (e = EHOSTUNREACH)  return ('host unreachable');
-     when (e = ENETUNREACH)   return ('network unreachable');
-     otherwise                return ('errno ' || char(e));
-   end; /* select */
-end net_errtext;
+   return (net_errtext_val(e));
+ end net_errtext;
 
-  /*-------------------------------------------------------------------*/
-  /* Server pool accessors (opaque handle API)                         */
-  /*-------------------------------------------------------------------*/
-  /* Return number of connected clients. */
-  net_server_nclients: procedure (server) returns (fixed bin(31));
-    dcl server pointer;
-    dcl 1 s based(server) like server_rec;
-    return (s.n_clients);
-  end net_server_nclients;
+ /*-------------------------------------------------------------------*/
+ /* Server pool accessors (opaque handle API)                         */
+ /*-------------------------------------------------------------------*/
+ /* Return number of connected clients. */
+ net_server_nclients: procedure (server) returns (fixed bin(31));
+   dcl server pointer;
+   dcl 1 s based(server) like server_rec;
+   return (s.n_clients);
+ end net_server_nclients;
 
-  /* Return client handle at index i (1..n_clients). */
-  net_server_client: procedure (server, i) returns (pointer);
-    dcl server pointer;
-    dcl i    fixed bin(31);
-    dcl 1 s  based(server) like server_rec;
-    if i < 1 | i > s.n_clients then return (null());
-    return (s.client_handles(i));
-  end net_server_client;
+ /* Return client handle at index i (1..n_clients). */
+ net_server_client: procedure (server, i) returns (pointer);
+   dcl server pointer;
+   dcl i    fixed bin(31);
+   dcl 1 s  based(server) like server_rec;
+   if i < 1 | i > s.n_clients then return (null());
+   return (s.client_handles(i));
+ end net_server_client;
 
-  /* Remove client at index i and compact pool. */
-  net_server_remove_client: procedure (server, i);
-    dcl server pointer;
-    dcl i    fixed bin(31);
-    dcl 1 s  based(server) like server_rec;
-    dcl j    fixed bin(31);
-    if i < 1 | i > s.n_clients then return;
-    call net_close(s.client_handles(i));
-    do j = i to s.n_clients - 1;
-      s.client_handles(j) = s.client_handles(j + 1);
-    end;
-    s.n_clients = s.n_clients - 1;
-  end net_server_remove_client;
+ /* Remove client at index i and compact pool. */
+ net_server_remove_client: procedure (server, i);
+   dcl server pointer;
+   dcl i    fixed bin(31);
+   dcl 1 s  based(server) like server_rec;
+   dcl j    fixed bin(31);
+   if i < 1 | i > s.n_clients then return;
+   call net_close(s.client_handles(i));
+   do j = i to s.n_clients - 1;
+     s.client_handles(j) = s.client_handles(j + 1);
+   end;
+   s.n_clients = s.n_clients - 1;
+ end net_server_remove_client;
 
-  end net;
+ end net;

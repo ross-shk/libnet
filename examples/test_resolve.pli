@@ -1,4 +1,4 @@
- /* Test netc_resolve directly */
+ /* Test net_resolve directly */
  test_resolve: procedure options(main);
  %include net;
 
