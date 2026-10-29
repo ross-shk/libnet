@@ -5,5 +5,5 @@ includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
 Name: libnet
 Description: PL/I-centric socket library (thin C bridge + compiled PL/I module)
 Version: @PROJECT_VERSION@
-Libs: -L${libdir} -lnet
+Libs: -L${libdir} -lnet -lsock
 Libs.private: @LIBNET_PC_PRIVATE@

@@ -21,16 +21,36 @@ option(LIBNET_BUILD_EXAMPLES "Trial-compile the PL/I examples (needs pli-llvm)" 
 
 set(LIBNET_PLIFLAGS "" CACHE STRING "Extra flags forwarded to the PL/I compiler")
 set(PLI_LLVM "$ENV{PLI_LLVM}" CACHE PATH "pli-llvm install prefix (bin/pli)")
+set(LIBSOCK_ROOT "" CACHE PATH "libsock install prefix")
+
+find_library(LIBSOCK_LIB
+  NAMES sock
+  PATHS
+    "${LIBSOCK_ROOT}/lib"
+    /usr/local/lib
+    /opt/libsock/lib
+  DOC "libsock static library (libsock.a)")
+find_path(LIBSOCK_INCLUDE_DIR
+  NAMES sock.inc
+  PATHS
+    "${LIBSOCK_ROOT}/include"
+    /usr/local/include
+    /opt/libsock/include
+  DOC "libsock header directory")
+if(NOT LIBSOCK_LIB OR NOT LIBSOCK_INCLUDE_DIR)
+  message(FATAL_ERROR
+    "libsock not found: LIBSOCK_LIB=${LIBSOCK_LIB} "
+    "LIBSOCK_INCLUDE_DIR=${LIBSOCK_INCLUDE_DIR}. "
+    "Build and install libsock first, then set -DLIBSOCK_ROOT=<prefix>.")
+endif()
+mark_as_advanced(LIBSOCK_LIB LIBSOCK_INCLUDE_DIR)
 
 # ---------------------------------------------------------------- C bridge
-# On POSIX (Linux/macOS) no C source is compiled: c_* symbols resolve
-# to libc directly via pli-llvm's external() bindings. On Windows,
-# source/c_bridge.c provides c_* implementations wrapping Winsock2.
-if(WIN32)
-  add_library(net STATIC source/c_bridge.c)
-else()
-  add_library(net STATIC)
-endif()
+# source/c_bridge.c now lives in libsock; the net target no longer compiles
+# any C source.  c_* symbols come from libsock (libc on POSIX, c_bridge.c on
+# Windows).  net links libsock as a PUBLIC dependency so consumers of libnet
+# also pull in libsock.a.
+add_library(net STATIC)
 add_library(libnet::net ALIAS net)
 set_target_properties(net PROPERTIES LINKER_LANGUAGE C)
 set_target_properties(net PROPERTIES
@@ -40,12 +60,7 @@ set_target_properties(net PROPERTIES
 target_compile_options(net PRIVATE
   $<$<C_COMPILER_ID:GNU,Clang,AppleClang>:-Wall -Wextra>
   $<$<C_COMPILER_ID:MSVC>:/W4>)
-if(WIN32)
-  # Winsock2 (WSAStartup/WSAPoll/getaddrinfo/...). PUBLIC so consumers of
-  # the static lib link it too.
-  target_link_libraries(net PUBLIC ws2_32)
-  target_compile_definitions(net PRIVATE _WIN32_WINNT=0x0600 WIN32_LEAN_AND_MEAN)
-endif()
+target_link_libraries(net PUBLIC ${LIBSOCK_LIB})
 
 # ------------------------------------------------------- PL/I module (opt)
 find_program(PLI_EXECUTABLE NAMES pli
@@ -60,16 +75,15 @@ else()
 endif()
 
 set(LIBNET_PLI_INCLUDES
-  "${CMAKE_CURRENT_SOURCE_DIR}/include/c_bridge.inc"
-  "${CMAKE_CURRENT_SOURCE_DIR}/include/sock.inc"
-  "${CMAKE_CURRENT_SOURCE_DIR}/include/type_defs.inc"
-  "${CMAKE_CURRENT_SOURCE_DIR}/include/errno.inc")
+  "${LIBSOCK_INCLUDE_DIR}/c_bridge.inc"
+  "${LIBSOCK_INCLUDE_DIR}/sock.inc"
+  "${LIBSOCK_INCLUDE_DIR}/type_defs.inc"
+  "${LIBSOCK_INCLUDE_DIR}/errno.inc")
 
 if(LIBNET_HAVE_PLI)
-  # Compile PL/I modules; the objects join the static lib alongside
-  # the C bridge object (on Windows) or stand alone (on POSIX).
+  # Compile the net PL/I module; the object joins the static lib.  sock.o now
+  # lives in libsock - net links it via ${LIBSOCK_LIB}.
   set(LIBNET_PLI_OBJ_NET "${CMAKE_CURRENT_BINARY_DIR}/net${CMAKE_C_OUTPUT_EXTENSION}")
-  set(LIBNET_PLI_OBJ_SOCK "${CMAKE_CURRENT_BINARY_DIR}/sock${CMAKE_C_OUTPUT_EXTENSION}")
   if(LIBNET_PLIFLAGS)
     set(_pli_flags ${LIBNET_PLIFLAGS})
   endif()
@@ -77,23 +91,13 @@ if(LIBNET_HAVE_PLI)
     OUTPUT "${LIBNET_PLI_OBJ_NET}"
     COMMAND "${PLI_EXECUTABLE}" ${_pli_flags}
       -c "${CMAKE_CURRENT_SOURCE_DIR}/source/net.pli"
-      -I "${CMAKE_CURRENT_SOURCE_DIR}/include"
+      -I "${LIBSOCK_INCLUDE_DIR}"
       -o "${LIBNET_PLI_OBJ_NET}"
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/source/net.pli" ${LIBNET_PLI_INCLUDES}
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     COMMENT "PL/I compiler: compiling source/net.pli"
     VERBATIM)
-  add_custom_command(
-    OUTPUT "${LIBNET_PLI_OBJ_SOCK}"
-    COMMAND "${PLI_EXECUTABLE}" ${_pli_flags}
-      -c "${CMAKE_CURRENT_SOURCE_DIR}/source/sock.pli"
-      -I "${CMAKE_CURRENT_SOURCE_DIR}/include"
-      -o "${LIBNET_PLI_OBJ_SOCK}"
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/source/sock.pli" ${LIBNET_PLI_INCLUDES}
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-    COMMENT "PL/I compiler: compiling source/sock.pli"
-    VERBATIM)
-  target_sources(net PRIVATE "${LIBNET_PLI_OBJ_NET}" "${LIBNET_PLI_OBJ_SOCK}")
+  target_sources(net PRIVATE "${LIBNET_PLI_OBJ_NET}")
   message(STATUS "libnet: PL/I compiler found (${PLI_EXECUTABLE}), PL/I module enabled")
 else()
   message(STATUS "libnet: PL/I compiler not found, building C bridge only (PL/I module skipped)")
@@ -104,13 +108,13 @@ set(LIBNET_DIST_INC "${CMAKE_CURRENT_BINARY_DIR}/dist/net.inc")
 add_custom_command(
   OUTPUT "${LIBNET_DIST_INC}"
   COMMAND "${CMAKE_COMMAND}"
-    "-DINC_FILES=${CMAKE_CURRENT_SOURCE_DIR}/include/net.inc$<SEMICOLON>${CMAKE_CURRENT_SOURCE_DIR}/include/type_defs.inc$<SEMICOLON>${CMAKE_CURRENT_SOURCE_DIR}/include/errno.inc"
+    "-DINC_FILES=${CMAKE_CURRENT_SOURCE_DIR}/include/net.inc$<SEMICOLON>${LIBSOCK_INCLUDE_DIR}/type_defs.inc$<SEMICOLON>${LIBSOCK_INCLUDE_DIR}/errno.inc"
     "-DOUT_FILE=${LIBNET_DIST_INC}"
     -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenDistInc.cmake"
   DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/include/net.inc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/type_defs.inc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/errno.inc"
+    "${LIBSOCK_INCLUDE_DIR}/type_defs.inc"
+    "${LIBSOCK_INCLUDE_DIR}/errno.inc"
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenDistInc.cmake"
   COMMENT "Generating dist/net.inc"
   VERBATIM)
@@ -136,8 +140,9 @@ if(LIBNET_HAVE_PLI AND LIBNET_BUILD_EXAMPLES)
         COMMAND "${PLI_EXECUTABLE}" ${_pli_flags}
           -c "${_src}"
           -I "${CMAKE_CURRENT_SOURCE_DIR}/include"
+          -I "${LIBSOCK_INCLUDE_DIR}"
           -o "${_obj}"
-        DEPENDS "${_src}" "${LIBNET_DIST_INC}"
+        DEPENDS "${_src}" "${LIBNET_DIST_INC}" "${LIBSOCK_INCLUDE_DIR}/sock.inc"
         COMMENT "PL/I compiler: trial-compiling examples/${ex}.pli"
         VERBATIM)
       list(APPEND _example_objs "${_obj}")
@@ -175,15 +180,17 @@ function(libnet_add_pli_program name src)
   endif()
   if(WIN32)
     # pli-llvm's lld-link does not understand -L/-l on Windows; pass the full
-    # path to the static lib and use /DEFAULTLIB for Winsock.
+    # path to the static libs and use /DEFAULTLIB for Winsock.
     add_custom_target(${name}
       COMMAND "${PLI_EXECUTABLE}" ${_pli_flags}
         "${src}"
         -I "${CMAKE_CURRENT_SOURCE_DIR}/include"
+        -I "${LIBSOCK_INCLUDE_DIR}"
         -o "${_out}"
         "$<TARGET_FILE:net>"
+        "${LIBSOCK_LIB}"
         -Wl,/DEFAULTLIB:ws2_32
-      DEPENDS net "${LIBNET_DIST_INC}" "${src}"
+      DEPENDS net "${LIBNET_DIST_INC}" "${src}" ${LIBNET_PLI_INCLUDES}
       COMMENT "PL/I compiler: linking ${name}"
       VERBATIM)
   else()
@@ -191,10 +198,12 @@ function(libnet_add_pli_program name src)
       COMMAND "${PLI_EXECUTABLE}" ${_pli_flags}
         "${src}"
         -I "${CMAKE_CURRENT_SOURCE_DIR}/include"
+        -I "${LIBSOCK_INCLUDE_DIR}"
         -o "${_out}"
         -L "$<TARGET_FILE_DIR:net>" -lnet
+        "${LIBSOCK_LIB}"
         ${_pli_extra}
-      DEPENDS net "${LIBNET_DIST_INC}" "${src}"
+      DEPENDS net "${LIBNET_DIST_INC}" "${src}" ${LIBNET_PLI_INCLUDES}
       COMMENT "PL/I compiler: linking ${name}"
       VERBATIM)
   endif()
