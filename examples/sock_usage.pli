@@ -1,0 +1,75 @@
+/* sock_usage.pli - direct use of the sock_* compatibility layer.
+ *
+ * Module:    sock_usage
+ * Purpose:   Demonstrate calling sock_* procedures directly, without
+ *            going through the net_* higher-level API.
+ * Usage:     cmake --build build --target libnet-examples
+ *            (trial-compile only; does not link or run)
+ */
+
+sock_usage: proc options(main);
+%include sock;
+%include errno;
+%include type_defs;
+
+   dcl fd       fixed bin(31);
+   dcl rc       fixed bin(31);
+   dcl n        fixed bin(31);
+   dcl addr_buf char(SOCKADDR_IN_SIZE);
+   dcl buf      char(256);
+
+   /* Create a TCP socket via sock_socket (thin wrapper over libc socket). */
+   fd = sock_socket(AF_INET, SOCK_STREAM, 0);
+   if fd < 0 then do;
+     put skip list('sock_socket failed, errno=', errno);
+     stop;
+   end;
+
+   /* Build a 16-byte sockaddr_in for 127.0.0.1:8080 directly in PL/I. */
+   addr_buf = low(SOCKADDR_IN_SIZE);
+   substr(addr_buf, 1, 1) = '10'x;   /* sin_len    = 16 */
+   substr(addr_buf, 2, 1) = '02'x;   /* sin_family = AF_INET */
+   substr(addr_buf, 3, 1) = '1F'x;   /* sin_port   = 8080 (0x1F90, big-endian) */
+   substr(addr_buf, 4, 1) = '90'x;
+   substr(addr_buf, 5, 4) = '7F000001'x;  /* sin_addr   = 127.0.0.1 */
+
+   /* Connect via sock_connect (thin wrapper over libc connect). */
+   rc = sock_connect(fd, addr_buf, SOCKADDR_IN_SIZE);
+   if rc < 0 then do;
+     put skip list('sock_connect failed, errno=', errno);
+     call sock_close(fd);
+     stop;
+   end;
+   put skip list('connected');
+
+   /* Send an HTTP request via sock_send. */
+   buf = 'GET / HTTP/1.0' || '0D0A'x || 'Host: localhost'
+      || '0D0A'x || 'Connection: close' || '0D0A'x || '0D0A'x;
+   n = sock_send(fd, buf, length(buf), 0);
+   if n < 0 then do;
+     put skip list('sock_send failed, errno=', errno);
+   end;
+   else do;
+     put skip list('sock_send sent', n, 'bytes');
+   end;
+
+   /* Receive the response via sock_recv. */
+   n = sock_recv(fd, buf, 256, 0);
+   if n < 0 then do;
+     put skip list('sock_recv failed, errno=', errno);
+   end;
+   else if n = 0 then do;
+     put skip list('peer closed connection');
+   end;
+   else do;
+     put skip list('sock_recv received', n, 'bytes');
+   end;
+
+   /* Close via sock_close. */
+   rc = sock_close(fd);
+   if rc < 0 then do;
+     put skip list('sock_close failed, errno=', errno);
+   end;
+
+   put skip list('done');
+ end;

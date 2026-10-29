@@ -46,9 +46,9 @@
  /* Shared constants (self-contained; the module compiles its own */
  /* copy)                                                        */
  /*---------------------------------------------------------------*/
- %include errno;
- %include type_defs;
- %include c_bridge;
+%include errno;
+%include type_defs;
+%include sock;
 
  /*---------------------------------------------------------------*/
  /* Module-level constants and conversion helpers                  */
@@ -114,8 +114,8 @@
  /* Raise net_error with the current errno, unless 0. */
  raise_err: procedure;
    dcl e fixed bin(31);
-   e = netc_errno();
-   call netc_clearerr();
+   e = errno;
+   errno = 0;
    if e ^= 0 then signal condition(net_error) set oncode(e);
  end raise_err;
 
@@ -150,7 +150,7 @@
    dcl got fixed bin(31);
    dcl fd  fixed bin(31);
    if got < 0 then do;
-     if netc_errno() = EAGAIN then call raise_timeout();
+     if errno = EAGAIN then call raise_timeout();
      else call raise_err();
    end;
    return (got);
@@ -161,7 +161,7 @@
    dcl n  fixed bin(31);
    dcl fd fixed bin(31);
    if n < 0 then do;
-     if netc_errno() = EAGAIN then call raise_timeout();
+     if errno = EAGAIN then call raise_timeout();
      else call raise_err();
    end;
    return (n);
@@ -177,8 +177,8 @@
  /* Internal byte-manipulation helpers                           */
  /*---------------------------------------------------------------*/
  /* These procedures replace the removed C glue functions:
-   netc_resolve, netc_sockopt, netc_setlinger, netc_settimeout,
-   netc_strerror, netc_connect_nb, netc_getsockerr.             */
+   sock_resolve, sock_sockopt, sock_setlinger, sock_settimeout,
+   sock_strerror, sock_connect_nb, sock_getsockerr.             */
  /*---------------------------------------------------------------*/
 
  /* utoa - convert a non-negative fixed binary value to varying text. */
@@ -452,7 +452,7 @@
  end map_opt;
 
  /* net_errtext_val - translate an errno/oncode value to human text.
-   This is the PL/I-only replacement for the removed netc_strerror. */
+   This is the PL/I-only replacement for the removed sock_strerror. */
  net_errtext_val: procedure (e) returns (char(32) varying);
    dcl e fixed bin(31);
 
@@ -511,7 +511,7 @@
    dcl fd     fixed bin(31);
 
    /* Create socket first */
-   fd = netc_socket(family, type, proto);
+   fd = sock_socket(family, type, proto);
    if fd < 0 then do;
      call raise_err();
      return (null());
@@ -537,8 +537,8 @@
  /*---------------------------------------------------------------*/
  /* Connect an opened connection to host:port.                    */
  /*                                                               */
- /* Uses netc_getaddrinfo to resolve the host and build a         */
- /* sockaddr_in, then calls raw netc_connect.                    */
+ /* Uses sock_getaddrinfo to resolve the host and build a         */
+ /* sockaddr_in, then calls raw sock_connect.                    */
  /*                                                               */
  /* Raises:   condition(net_error) on connect failure.            */
  /*                                                               */
@@ -553,9 +553,9 @@
    dcl rc   fixed bin(31);
 
    call validate_port(port);
-   rc = netc_getaddrinfo(host, length(host), port, addr_buf);
+   rc = sock_getaddrinfo(host, length(host), port, addr_buf);
    call check_rc(rc);
-   rc = netc_connect(c.fd, addr_buf, SOCKADDR_IN_SIZE);
+   rc = sock_connect(c.fd, addr_buf, SOCKADDR_IN_SIZE);
    call check_rc(rc);
    c.is_connected = '1'b;
    c.peer_port    = port;
@@ -599,7 +599,7 @@
    dcl 1 c based(h) like conn_rec;
 
    if h = null() then return;
-   if c.fd > 0 then call netc_close(c.fd);
+   if c.fd > 0 then call sock_close(c.fd);
    c.fd           = 0;
    c.is_connected = '0'b;
    c.in_len       = 0;
@@ -618,7 +618,7 @@
    dcl 1 c based(h) like conn_rec;
    dcl how fixed bin(31);
    dcl rc  fixed bin(31);
-   rc = netc_shutdown(c.fd, how);
+   rc = sock_shutdown(c.fd, how);
    call check_rc(rc);
  end net_shutdown;
 
@@ -641,7 +641,7 @@
 
    call validate_socket(c.fd);
 
-   got = netc_recv(c.fd, tmp, NET_BUF_CAP, 0);
+   got = sock_recv(c.fd, tmp, NET_BUF_CAP, 0);
    got = check_recv(got, c.fd);
    if got > 0 then buffer = substr(tmp, 1, got);
    return (got);
@@ -743,7 +743,7 @@
        call raise_overflow();
        return (0);
      end;
-     got = netc_recv(c.fd, tmp, cap, 0);
+     got = sock_recv(c.fd, tmp, cap, 0);
      got = check_recv(got, c.fd);
      if got <= 0 then return (0);
 
@@ -772,7 +772,7 @@
    dcl buffer char(NET_BUF_CAP) varying;
    dcl n      fixed bin(31);
 
-   n = netc_send(c.fd, buffer, length(buffer), 0);
+   n = sock_send(c.fd, buffer, length(buffer), 0);
    return (check_send(n, c.fd));
  end net_write;
 
@@ -783,7 +783,7 @@
    dcl flags  fixed bin(31);
    dcl n      fixed bin(31);
 
-   n = netc_send(c.fd, buffer, length(buffer), flags);
+   n = sock_send(c.fd, buffer, length(buffer), flags);
    return (check_send(n, c.fd));
  end net_send;
 
@@ -826,7 +826,7 @@
    dcl flags  fixed bin(31);
    dcl n      fixed bin(31);
 
-   n = netc_send(c.fd, buffer, length(buffer), flags);
+   n = sock_send(c.fd, buffer, length(buffer), flags);
    return (check_send(n, c.fd));
  end net_send_once;
 
@@ -846,7 +846,7 @@
    dcl ms     fixed bin(31);
    dcl r      fixed bin(31);
 
-   r = netc_poll(c.fd, events, ms);
+   r = sock_poll(c.fd, events, ms);
    call check_rc(r);
    return (r);
  end net_poll;
@@ -885,7 +885,7 @@
      fds(i + 1) = s.client_handles(i) -> c.fd;
    end;
 
-   r = netc_poll_multi(addr(fds(1)), addr(events(1)),
+   r = sock_poll_multi(addr(fds(1)), addr(events(1)),
                        addr(revents(1)), n, ms);
 
    free fds;
@@ -896,7 +896,7 @@
  end net_poll_multi;
 
  /* Set read/write timeouts (ms; 0 = blocking).                    */
- /* Builds a struct timeval in PL/I, passes via netc_setsockopt.    */
+ /* Builds a struct timeval in PL/I, passes via sock_setsockopt.    */
  /* Raises:   condition(net_error) on failure.                      */
  net_set_timeout: procedure (h, rto, wto);
    dcl h   pointer;
@@ -907,11 +907,11 @@
    dcl rc    fixed bin(31);
 
    call build_timeval(rto, tv_buf);
-   rc = netc_setsockopt(c.fd, SOL_SOCKET, SO_RCVTIMEO, addr(tv_buf), TIMEVAL_SIZE);
+   rc = sock_setsockopt(c.fd, SOL_SOCKET, SO_RCVTIMEO, addr(tv_buf), TIMEVAL_SIZE);
    call check_rc(rc);
 
    call build_timeval(wto, tv_buf);
-   rc = netc_setsockopt(c.fd, SOL_SOCKET, SO_SNDTIMEO, addr(tv_buf), TIMEVAL_SIZE);
+   rc = sock_setsockopt(c.fd, SOL_SOCKET, SO_SNDTIMEO, addr(tv_buf), TIMEVAL_SIZE);
    call check_rc(rc);
 
    c.read_timeout  = rto;
@@ -926,8 +926,8 @@
    dcl on bit(1);
    dcl rc fixed bin(31);
 
-   if on then rc = netc_setnonblock(c.fd, 1);
-   else       rc = netc_setnonblock(c.fd, 0);
+   if on then rc = sock_setnonblock(c.fd, 1);
+   else       rc = sock_setnonblock(c.fd, 0);
 
    call check_rc(rc);
  end net_set_nonblocking;
@@ -938,7 +938,7 @@
  /* Set a socket option by libnet code (NETOPT_REUSEADDR /            */
  /* NETOPT_KEEPALIVE / NETOPT_NODELAY). value is 0 (off) or 1 (on).   */
  /* Uses map_opt to translate NETOPT_* to (level, optname), then      */
- /* calls raw netc_setsockopt with an int value.                    */
+ /* calls raw sock_setsockopt with an int value.                    */
  /* Raises:   condition(net_error) on failure.                        */
  net_setopt: procedure (h, opt, value);
    dcl h     pointer;
@@ -950,13 +950,13 @@
    dcl rc      fixed bin(31);
 
    call map_opt(opt, level, optname);
-   rc = netc_setsockopt(c.fd, level, optname, addr(value), 4);
+   rc = sock_setsockopt(c.fd, level, optname, addr(value), 4);
    call check_rc(rc);
  end net_setopt;
 
  /* SO_LINGER: enable/disable with a timeout in seconds.              */
  /* Builds struct linger in PL/I (8 bytes: two int fields), passes    */
- /* via netc_setsockopt.                                              */
+ /* via sock_setsockopt.                                              */
  /* Raises:   condition(net_error) on failure.                        */
  net_set_linger: procedure (h, on, seconds);
    dcl h       pointer;
@@ -979,7 +979,7 @@
    linger.l_onoff = optval;
    linger.l_linger = seconds;
 
-   rc = netc_setsockopt(c.fd, SOL_SOCKET, SO_LINGER, addr(linger_buf), LINGER_SIZE);
+   rc = sock_setsockopt(c.fd, SOL_SOCKET, SO_LINGER, addr(linger_buf), LINGER_SIZE);
    call check_rc(rc);
  end net_set_linger;
 
@@ -987,7 +987,7 @@
  /* net_peer / net_local                                              */
  /*-------------------------------------------------------------------*/
  /* Fill ip/port with the peer (remote) address.                      */
- /* Calls netc_getpeername to fill a raw sockaddr_in, then parses    */
+ /* Calls sock_getpeername to fill a raw sockaddr_in, then parses    */
  /* it in PL/I.                                                      */
  /* Raises:   condition(net_error) on failure.                        */
  net_peer: procedure (h, ip, port);
@@ -1000,7 +1000,7 @@
    dcl rc   fixed bin(31);
 
    addrlen = SOCKADDR_IN_SIZE;
-   rc = netc_getpeername(c.fd, addr_buf, addr(addrlen));
+   rc = sock_getpeername(c.fd, addr_buf, addr(addrlen));
    call check_rc(rc);
    call parse_sockaddr_in(addr_buf, ip, port);
  end net_peer;
@@ -1017,7 +1017,7 @@
    dcl rc   fixed bin(31);
 
    addrlen = SOCKADDR_IN_SIZE;
-   rc = netc_getsockname(c.fd, addr_buf, addr(addrlen));
+   rc = sock_getsockname(c.fd, addr_buf, addr(addrlen));
    call check_rc(rc);
    call parse_sockaddr_in(addr_buf, ip, port);
  end net_local;
@@ -1026,7 +1026,7 @@
  /* net_resolve                                                       */
  /*-------------------------------------------------------------------*/
  /* Resolve a host name (or dotted quad) to a dotted-quad string      */
- /* in ip. Uses netc_getaddrinfo (raw getaddrinfo) + parse_sockaddr.  */
+ /* in ip. Uses sock_getaddrinfo (raw getaddrinfo) + parse_sockaddr.  */
  /* Raises:   condition(net_error) on resolution failure.             */
  net_resolve: procedure (host, ip);
    dcl host char(NET_HOST_MAX) varying;
@@ -1035,7 +1035,7 @@
    dcl rc   fixed bin(31);
    dcl dummy_port fixed bin(31);
 
-   rc = netc_getaddrinfo(host, length(host), 0, addr_buf);
+   rc = sock_getaddrinfo(host, length(host), 0, addr_buf);
    call check_rc(rc);
    call parse_sockaddr_in(addr_buf, ip, dummy_port);
  end net_resolve;
@@ -1044,7 +1044,7 @@
  /* net_strerror                                                      */
  /*-------------------------------------------------------------------*/
  /* Human-readable text for an errno value, into buf.                 */
- /* Pure PL/I (replaces removed netc_strerror). Uses net_errtext_val. */
+ /* Pure PL/I (replaces removed sock_strerror). Uses net_errtext_val. */
  net_strerror: procedure (e, buf);
    dcl e   fixed bin(31);
    dcl buf char(NET_BUF_CAP) varying;
@@ -1061,7 +1061,7 @@
  /* polls for writability and then calls net_connect_finish. No       */
  /* condition is raised for in-progress (it is not an error).         */
  /*                                                                   */
- /* Uses netc_setnonblock + netc_getaddrinfo + netc_connect.          */
+ /* Uses sock_setnonblock + sock_getaddrinfo + sock_connect.          */
  /* Raises:   condition(net_error) on a hard connect failure.         */
  net_connect_nb: procedure (h, host, port);
    dcl h    pointer;
@@ -1072,29 +1072,29 @@
    dcl rc   fixed bin(31);
 
    call validate_port(port);
-   rc = netc_setnonblock(c.fd, 1);
+   rc = sock_setnonblock(c.fd, 1);
    call check_rc(rc);
 
-   rc = netc_getaddrinfo(host, length(host), port, addr_buf);
+   rc = sock_getaddrinfo(host, length(host), port, addr_buf);
    call check_rc(rc);
 
-   call netc_clearerr();
-   rc = netc_connect(c.fd, addr_buf, SOCKADDR_IN_SIZE);
+   errno = 0;
+   rc = sock_connect(c.fd, addr_buf, SOCKADDR_IN_SIZE);
    if rc = 0 then do;
      c.is_connected = '1'b;
      c.peer_port    = port;
      return;
    end;
    /* EINPROGRESS (POSIX) and EAGAIN (Winsock) are normal here. */
-   if netc_errno() = EINPROGRESS | netc_errno() = EAGAIN then do;
-     call netc_clearerr();
+   if errno = EINPROGRESS | errno = EAGAIN then do;
+     errno = 0;
      return;
    end;
    call raise_err();
  end net_connect_nb;
 
  /* Finalize a nonblocking connect after the fd became writable.      */
- /* Uses netc_getsockopt with SO_ERROR to check the result.          */
+ /* Uses sock_getsockopt with SO_ERROR to check the result.          */
  /* Raises:   condition(net_error) if the connect ultimately failed.  */
  net_connect_finish: procedure (h);
    dcl h  pointer;
@@ -1109,7 +1109,7 @@
        2 err_val fixed bin(31);
 
    elen = 4;
-   rc = netc_getsockopt(c.fd, SOL_SOCKET, SO_ERROR, addr(err_buf), addr(elen));
+   rc = sock_getsockopt(c.fd, SOL_SOCKET, SO_ERROR, addr(err_buf), addr(elen));
    call check_rc(rc);
 
    p = addr(err_buf);
@@ -1128,7 +1128,7 @@
  /* UDP datagrams                                                     */
  /*-------------------------------------------------------------------*/
  /* Send a datagram to ip:port on this (datagram) connection.         */
- /* Builds a sockaddr_in in PL/I and calls raw netc_sendto.          */
+ /* Builds a sockaddr_in in PL/I and calls raw sock_sendto.          */
  /*                                                                   */
  /* Returns:  the number of bytes sent.                               */
  /*                                                                   */
@@ -1144,12 +1144,12 @@
    dcl n      fixed bin(31);
 
    call build_sockaddr_in(ip, port, addr_buf);
-   n = netc_sendto(c.fd, buffer, length(buffer), 0, addr_buf, SOCKADDR_IN_SIZE);
+   n = sock_sendto(c.fd, buffer, length(buffer), 0, addr_buf, SOCKADDR_IN_SIZE);
    return (check_send(n, c.fd));
  end net_sendto;
 
  /* Receive a datagram; the sender's address is returned in ip/port.  */
- /* Calls raw netc_recvfrom, then parses the sockaddr_in in PL/I.    */
+ /* Calls raw sock_recvfrom, then parses the sockaddr_in in PL/I.    */
  /*                                                                   */
  /* Returns:  the number of bytes received.                           */
  /*                                                                   */
@@ -1167,9 +1167,9 @@
    dcl rlen   fixed bin(31);
 
    rlen = SOCKADDR_IN_SIZE;
-   n = netc_recvfrom(c.fd, rbuf, NET_BUF_CAP, 0, raddr, addr(rlen));
+   n = sock_recvfrom(c.fd, rbuf, NET_BUF_CAP, 0, raddr, addr(rlen));
    if n < 0 then do;
-     if netc_errno() = EAGAIN then call raise_timeout();
+     if errno = EAGAIN then call raise_timeout();
      else call raise_err();
      return (0);
    end;
@@ -1187,7 +1187,7 @@
  /*-------------------------------------------------------------------*/
  /* Bind to port and listen. Returns a server handle (POINTER).       */
  /* Uses build_sockaddr_any to construct an INADDR_ANY bind address   */
- /* in PL/I, then calls raw netc_bind + netc_listen.                 */
+ /* in PL/I, then calls raw sock_bind + sock_listen.                 */
  net_listen: procedure (port, backlog) returns (pointer);
    dcl port    fixed bin(31);
    dcl backlog fixed bin(31);
@@ -1197,34 +1197,34 @@
    dcl rc      fixed bin(31);
    dcl one     fixed bin(31) init(1);
 
-   fd = netc_socket(AF_INET, SOCK_STREAM, 0);
+   fd = sock_socket(AF_INET, SOCK_STREAM, 0);
    if fd < 0 then do;
      call raise_err();
      return (null());
    end;
 
    /* Allow immediate restart while old connections sit in TIME_WAIT. */
-   rc = netc_setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, addr(one), 4);
+   rc = sock_setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, addr(one), 4);
 
    call build_sockaddr_any(port, addr_buf);
-   rc = netc_bind(fd, addr_buf, SOCKADDR_IN_SIZE);
+   rc = sock_bind(fd, addr_buf, SOCKADDR_IN_SIZE);
    if rc < 0 then do;
      call raise_err();
-     call netc_close(fd);
+     call sock_close(fd);
      return (null());
    end;
 
-   rc = netc_listen(fd, backlog);
+   rc = sock_listen(fd, backlog);
    if rc < 0 then do;
      call raise_err();
-     call netc_close(fd);
+     call sock_close(fd);
      return (null());
    end;
 
    /* Make server socket non-blocking for use with poll(). */
-   rc = netc_setnonblock(fd, 1);
+   rc = sock_setnonblock(fd, 1);
    if rc < 0 then do;
-     call netc_close(fd);
+     call sock_close(fd);
      call raise_err();
      return (null());
    end;
@@ -1256,11 +1256,11 @@
 
    /* The listening socket is non-blocking: wait for a connection. */
    do while ('1'b);
-     cfd = netc_accept(s.fd);
+     cfd = sock_accept(s.fd);
      if cfd >= 0 then leave;
-     if netc_errno() = EAGAIN then do;
-       call netc_clearerr();
-       rc = netc_poll(s.fd, POLLIN, -1);
+     if errno = EAGAIN then do;
+       errno = 0;
+       rc = sock_poll(s.fd, POLLIN, -1);
        if rc < 0 then do;
          call raise_err();
          return;
@@ -1273,15 +1273,15 @@
    end;
 
    if s.n_clients >= NET_MAX_CLIENTS then do;
-     call netc_close(cfd);
+     call sock_close(cfd);
      signal condition(net_error) set oncode(EMFILE);
      return;
    end;
 
    /* macOS accept inherits O_NONBLOCK from the listening socket. */
-   rc = netc_setnonblock(cfd, 0);
+   rc = sock_setnonblock(cfd, 0);
    if rc < 0 then do;
-     call netc_close(cfd);
+     call sock_close(cfd);
      call raise_err();
      return;
    end;
@@ -1317,11 +1317,11 @@
 
    /* The listening socket is non-blocking: wait for a connection. */
    do while ('1'b);
-     cfd = netc_accept(s.fd);
+     cfd = sock_accept(s.fd);
      if cfd >= 0 then leave;
-     if netc_errno() = EAGAIN then do;
-       call netc_clearerr();
-       rc = netc_poll(s.fd, POLLIN, -1);
+     if errno = EAGAIN then do;
+       errno = 0;
+       rc = sock_poll(s.fd, POLLIN, -1);
        if rc < 0 then do;
          call raise_err();
          return;
@@ -1334,9 +1334,9 @@
    end;
 
    /* macOS accept inherits O_NONBLOCK from the listening socket. */
-   rc = netc_setnonblock(cfd, 0);
+   rc = sock_setnonblock(cfd, 0);
    if rc < 0 then do;
-     call netc_close(cfd);
+     call sock_close(cfd);
      call raise_err();
      return;
    end;

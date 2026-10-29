@@ -23,8 +23,16 @@ set(LIBNET_PLIFLAGS "" CACHE STRING "Extra flags forwarded to the PL/I compiler"
 set(PLI_LLVM "$ENV{PLI_LLVM}" CACHE PATH "pli-llvm install prefix (bin/pli)")
 
 # ---------------------------------------------------------------- C bridge
-add_library(net STATIC source/c_bridge.c)
+# On POSIX (Linux/macOS) no C source is compiled: c_* symbols resolve
+# to libc directly via pli-llvm's external() bindings. On Windows,
+# source/c_bridge.c provides c_* implementations wrapping Winsock2.
+if(WIN32)
+  add_library(net STATIC source/c_bridge.c)
+else()
+  add_library(net STATIC)
+endif()
 add_library(libnet::net ALIAS net)
+set_target_properties(net PROPERTIES LINKER_LANGUAGE C)
 set_target_properties(net PROPERTIES
   C_STANDARD 11
   C_STANDARD_REQUIRED ON
@@ -53,27 +61,39 @@ endif()
 
 set(LIBNET_PLI_INCLUDES
   "${CMAKE_CURRENT_SOURCE_DIR}/include/c_bridge.inc"
+  "${CMAKE_CURRENT_SOURCE_DIR}/include/sock.inc"
   "${CMAKE_CURRENT_SOURCE_DIR}/include/type_defs.inc"
   "${CMAKE_CURRENT_SOURCE_DIR}/include/errno.inc")
 
 if(LIBNET_HAVE_PLI)
-  # Compile source/net.pli once; the object joins the static lib alongside
-  # the C bridge object (equivalent to the old `ar rcs libnet.a c_bridge.o net.o`).
-  set(LIBNET_PLI_OBJ "${CMAKE_CURRENT_BINARY_DIR}/net${CMAKE_C_OUTPUT_EXTENSION}")
+  # Compile PL/I modules; the objects join the static lib alongside
+  # the C bridge object (on Windows) or stand alone (on POSIX).
+  set(LIBNET_PLI_OBJ_NET "${CMAKE_CURRENT_BINARY_DIR}/net${CMAKE_C_OUTPUT_EXTENSION}")
+  set(LIBNET_PLI_OBJ_SOCK "${CMAKE_CURRENT_BINARY_DIR}/sock${CMAKE_C_OUTPUT_EXTENSION}")
   if(LIBNET_PLIFLAGS)
     set(_pli_flags ${LIBNET_PLIFLAGS})
   endif()
   add_custom_command(
-    OUTPUT "${LIBNET_PLI_OBJ}"
+    OUTPUT "${LIBNET_PLI_OBJ_NET}"
     COMMAND "${PLI_EXECUTABLE}" ${_pli_flags}
       -c "${CMAKE_CURRENT_SOURCE_DIR}/source/net.pli"
       -I "${CMAKE_CURRENT_SOURCE_DIR}/include"
-      -o "${LIBNET_PLI_OBJ}"
+      -o "${LIBNET_PLI_OBJ_NET}"
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/source/net.pli" ${LIBNET_PLI_INCLUDES}
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     COMMENT "PL/I compiler: compiling source/net.pli"
     VERBATIM)
-  target_sources(net PRIVATE "${LIBNET_PLI_OBJ}")
+  add_custom_command(
+    OUTPUT "${LIBNET_PLI_OBJ_SOCK}"
+    COMMAND "${PLI_EXECUTABLE}" ${_pli_flags}
+      -c "${CMAKE_CURRENT_SOURCE_DIR}/source/sock.pli"
+      -I "${CMAKE_CURRENT_SOURCE_DIR}/include"
+      -o "${LIBNET_PLI_OBJ_SOCK}"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/source/sock.pli" ${LIBNET_PLI_INCLUDES}
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    COMMENT "PL/I compiler: compiling source/sock.pli"
+    VERBATIM)
+  target_sources(net PRIVATE "${LIBNET_PLI_OBJ_NET}" "${LIBNET_PLI_OBJ_SOCK}")
   message(STATUS "libnet: PL/I compiler found (${PLI_EXECUTABLE}), PL/I module enabled")
 else()
   message(STATUS "libnet: PL/I compiler not found, building C bridge only (PL/I module skipped)")
@@ -97,26 +117,14 @@ add_custom_command(
 add_custom_target(libnet_dist_inc ALL DEPENDS "${LIBNET_DIST_INC}")
 
 # ------------------------------------------------------------------ tests
-if(BUILD_TESTING)
-  add_executable(cb_test source/c_bridge.c tests/c_bridge.c)
-  set_target_properties(cb_test PROPERTIES
-    C_STANDARD 11
-    C_STANDARD_REQUIRED ON)
-  target_compile_options(cb_test PRIVATE
-    $<$<C_COMPILER_ID:GNU,Clang,AppleClang>:-Wall -Wextra>
-    $<$<C_COMPILER_ID:MSVC>:/W4>)
-  if(WIN32)
-    target_link_libraries(cb_test PRIVATE ws2_32)
-    target_compile_definitions(cb_test PRIVATE _WIN32_WINNT=0x0600 WIN32_LEAN_AND_MEAN)
-  endif()
-  add_test(NAME c_bridge COMMAND cb_test)
-endif()
+# cb_test removed: C bridge regression test no longer applies since
+# c_bridge.c is Windows-only and c_* resolves to libc on POSIX.
 
 # ------------------------------------------------------ examples (PL/I only)
 if(LIBNET_HAVE_PLI AND LIBNET_BUILD_EXAMPLES)
   set(LIBNET_EXAMPLES
     echo_server client resolve fetch fetch_dyn http_client multi_echo_server
-    test_read_all test_resolve simple_usage)
+    test_read_all test_resolve simple_usage sock_usage)
   set(_example_objs)
   foreach(ex IN LISTS LIBNET_EXAMPLES)
     set(_src "${CMAKE_CURRENT_SOURCE_DIR}/examples/${ex}.pli")

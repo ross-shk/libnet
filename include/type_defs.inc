@@ -42,7 +42,7 @@
 
  /* --- raw socket option levels (platform-specific; macOS shown) ---
   * On Linux, SOL_SOCKET = 1. The PL/I layer passes these directly to
-  * the raw netc_setsockopt / netc_getsockopt wrappers.
+  * the raw sock_setsockopt / sock_getsockopt wrappers.
   * ---------------------------------------------------------------- */
  %replace SOL_SOCKET     by 65535;  /* macOS; Linux: 1          */
  %replace SO_REUSEADDR   by     4;  /* macOS; Linux: 2          */
