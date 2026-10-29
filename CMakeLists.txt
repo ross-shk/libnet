@@ -1,15 +1,15 @@
 # libnet — CMake build (portable: Linux, macOS, Windows).
 #
 # Layout:
-#   lib net        <- source/c_bridge.c [+ compiled source/net.pli if the PL/I compiler
-#                     is available]  (static lib, installed with net.inc)
-#   dist/net.inc   <- include/{net,type_defs,errno}.inc minus %include lines
-#   cb_test        <- C bridge regression test (CTest)
+#   lib net        <- compiled source/net.pli [if the PL/I compiler is
+#                     available], linking libsock.a (external dependency).
+#   dist/net.inc   <- include/net.inc + libsock type_defs.inc + errno.inc minus %include lines
 #   examples       <- trial-compile of examples/*.pli (needs pli-llvm)
 #
-# The PL/I module is optional: pli-llvm's `pli` compiler is usually absent on
-# Windows, so when it is not found the C bridge + its test still build
-# and run. Point CMake at the PL/I compiler with -DPLI_EXECUTABLE=... or PLI_LLVM.
+# libsock (the socket compatibility layer) must be built and installed first.
+# Point CMake at it with -DLIBSOCK_ROOT=<prefix> (auto-detected from
+# /usr/local or /opt/libsock). Point CMake at the PL/I compiler with
+# -DPLI_EXECUTABLE=... or PLI_LLVM.
 cmake_minimum_required(VERSION 3.16)
 project(libnet LANGUAGES C VERSION 0.1.0)
 

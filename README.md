@@ -2,27 +2,34 @@
 
 ## Requirements
 
+- **libsock** — the socket compatibility layer (separate project, consumed as a black-box dependency)
+  - Build and install libsock first; libnet finds it via `-DLIBSOCK_ROOT=<prefix>` (auto-detected from `/usr/local` or `/opt/libsock`)
 - **pli-llvm** — modern open-source PL/I compiler targetting LLVM
   - GitHub: [https://github.com/pli-llvm/pli-llvm](https://github.com/pli-llvm/pli-llvm)
   - Required for compiling `source/net.pli` and linking PL/I programs against
-    the C bridge (`source/c_bridge.c`)
-- **C compiler** (clang/gcc/MSVC/MinGW) — for the C bridge
+    the library
+- **C compiler** (clang/gcc/MSVC/MinGW) — for the libsock C bridge
 - **CMake ≥ 3.16** — portable build system (Linux, macOS, Windows)
 - **make** — CMake generator backends (Ninja, Unix Makefiles, MSBuild, etc.)
   are all compatible; a working backend is needed automatically
 
-> **Platform note:** the C bridge is portable, but `include/errno.inc` and
-> `include/type_defs.inc` currently contain macOS arm64 socket/errno values.
-> The compiled PL/I layer therefore targets macOS arm64; Linux/Windows need
-> matching constant files.
+> **Platform note:** `libsock`'s `include/errno.inc` and `include/type_defs.inc`
+> currently contain macOS arm64 socket/errno values. The compiled PL/I layer
+> therefore targets macOS arm64; Linux/Windows need matching constant files.
 
 ## Quick Start
 
 ```bash
-# Build the library
-cmake -S . -B build && cmake --build build
+# 1. Build and install libsock (the socket compatibility layer)
+cmake -S /path/to/libsock -B build-libsock
+cmake --build build-libsock
+cmake --install build-libsock                  # to /usr/local by default
 
-# Compile and run the simple example (pli-llvm required)
+# 2. Build libnet against the installed libsock
+cmake -S . -B build -DLIBSOCK_ROOT=/path/to/libsock-install
+cmake --build build
+
+# 3. Compile and run the simple example (pli-llvm required)
 cmake --build build --target simple_usage
 ./build/simple_usage
 ```
@@ -58,10 +65,14 @@ call net_close(conn);
 
 A connection-oriented socket library whose design inverts the usual split:
 
-- **minimal C** (`source/c_bridge.c`): only the raw syscalls PL/I cannot perform — `socket/bind/listen/accept/connect/send/recv/sendto/recvfrom/setsockopt/getsockopt/getpeername/getsockname/setnonblock/poll/getaddrinfo/close/shutdown` plus an `errno` cache. Reached from PL/I through pli-llvm's by-value C FFI.
-- **most processing in PL/I** (`source/net.pli`, a compiled module): the connection pool, receive buffering, delimiter scanning, retry loops, timeout and error policy — all in PL/I, using library-owned `BASED` records, `CONTROLLED` receive buffers, and pointer handles. The module is archived into `libnet.a` alongside the C bridge, so programs link it like any library instead of `%include`ing the implementation.
+- **libsock** (separate project): the socket compatibility layer.
+  - `source/c_bridge.c` — the ONLY C, thin syscall wrappers (`c_*` naming) around Winsock2 on Windows; on POSIX, libc symbols resolve directly via pli-llvm's by-value FFI.
+  - `source/sock.pli` — PL/I wrappers (`sock_*`) over the raw `c_*` bindings.
+  - `include/{sock,c_bridge,errno,type_defs}.inc` — interface declarations and constants.
+- **libnet** (this project): consumes `libsock.a` + headers as a black-box dependency.
+  - `source/net.pli` — the compiled PL/I module: client + server API, connection pool, receive buffering, delimiter scanning, retry loops, timeout and error policy. Archived into `libnet.a`, so programs link it like any library instead of `%include`ing the implementation.
 
-Callers hold only a `POINTER` handle; the connection structure layout is private to the library. This is the classic PL/I "fat runtime / task context" pattern — well-suited to AI-authored PL/I, where a handful of thin PL/I calls replace a page of socket bookkeeping.
+Callers hold only a `POINTER` handle; the connection structure layout is private to the library. This is the classic PL/I "fat runtime / task context" pattern – well-suited to AI-authored PL/I, where a handful of thin PL/I calls replace a page of socket bookkeeping.
 
 ### Style
 
@@ -80,7 +91,8 @@ Names follow classic PL/I convention: short meaningful module prefixes, lowercas
 
 | Layer                        | Prefix / form   | Example                                                                 |
 | ---------------------------- | --------------- | ----------------------------------------------------------------------- |
-| C bridge (system primitives) | `netc_`         | `netc_socket`, `netc_recv`, `netc_setsockopt`                           |
+| C bridge (system primitives) | `c_`            | `c_socket`, `c_recv`, `c_setsockopt` (in libsock)                       |
+| sock wrappers (libc)         | `sock_`         | `sock_socket`, `sock_poll`, `sock_getaddrinfo` (in libsock)             |
 | Public PL/I procedures       | `net_`          | `net_open`, `net_connect`, `net_read_until`                             |
 | Option codes                 | `NETOPT_*`      | `NETOPT_REUSEADDR`, `NETOPT_KEEPALIVE`, `NETOPT_NODELAY`                |
 | Status codes                 | `NET_ERR_*`     | `NET_ERR_EOF`, `NET_ERR_TIMEOUT`, `NET_ERR_OVERFLOW` (oncode sentinels) |
@@ -93,14 +105,12 @@ Names follow classic PL/I convention: short meaningful module prefixes, lowercas
 
 | Path                                                      | Contents                                                                                |
 | --------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `source/c_bridge.c`                                       | the ONLY C — thin syscall wrappers (`netc_*`)                                           |
-| `source/net.pli`                                          | the compiled PL/I module — client + server API, connection pool, error policy           |
-| `include/net.inc`                                         | interface include — constants + conditions + external `net_*` entries (`%include net;`) |
-| `include/type_defs.inc`                                   | constants (`AF_*`, `SOCK_*`, `NET_*`), sizes                                            |
-| `include/errno.inc`                                       | POSIX errno as `%replace` named constants                                               |
-| `include/c_bridge.inc`                                    | by-value FFI declarations for the C bridge (module-only)                                |
+| `libnet/source/net.pli`                                   | the compiled PL/I module — client + server API, connection pool, error policy           |
+| `libnet/include/net.inc`                                  | interface include — constants + conditions + external `net_*` entries (`%include net;`) |
+| `libsock/source/c_bridge.c`                               | the ONLY C — thin syscall wrappers (`c_*`) wrapping Winsock2 on Windows                 |
+| `libsock/source/sock.pli`                                 | PL/I wrappers (`sock_*`) over the raw `c_*` syscalls                                    |
+| `libsock/include/{sock,c_bridge,errno,type_defs}.inc`    | interface declarations and constants (socket domain, errno, sockaddr sizes, etc.)       |
 | `docs/api.md`                                             | structured reference of every function (signature, returns, raises)                     |
-| `tests/c_bridge.c`                                        | C regression test for the bridge bindings                                               |
 | `examples/echo_server.pli`                                | echo server + client demo                                                               |
 | `examples/client.pli`                                     | minimal TCP client                                                                      |
 | `examples/resolve.pli`                                    | DNS resolution demo                                                                     |
@@ -112,12 +122,9 @@ Names follow classic PL/I convention: short meaningful module prefixes, lowercas
 ## Build
 
 ```bash
-# Build the library (C bridge + PL/I module if pli-llvm is available) + dist/net.inc
-cmake -S . -B build
+# Build the library (PL/I module if pli-llvm is available) + dist/net.inc
+cmake -S . -B build -DLIBSOCK_ROOT=/usr/local   # auto-detected by default
 cmake --build build
-
-# Run the C bridge regression test
-ctest --test-dir build --output-on-failure
 
 # Trial-compile all examples (requires pli-llvm)
 cmake --build build --target libnet-examples
@@ -129,21 +136,22 @@ cmake --build build --target libnet-examples
 # MinGW-w64 GCC needs its bin dir (libwinpthread-1.dll) on PATH first:
 $env:PATH = "C:\...\mingw64\bin;" + $env:PATH
 
-cmake -S . -B build -G "MinGW Makefiles"   # or "Visual Studio 17 2022", Ninja, ...
+cmake -S . -B build -G "MinGW Makefiles" -DLIBSOCK_ROOT=C:\libsock   # or "Visual Studio 17 2022", Ninja, ...
 cmake --build build
-ctest --test-dir build --output-on-failure
 cmake --install build --prefix C:\libnet   # lib/net.lib or libnet.a, include/net.inc, ...
 ```
 
 - Use `-DCMAKE_BUILD_TYPE=Release` for release builds (enables `-O2`/`-O3`
   optimization; CMake does not optimize by default in non-release builds).
-- The C bridge links Winsock2 (`ws2_32`) automatically on Windows; no
-  manual `WSAStartup` is needed — the bridge initialises Winsock lazily.
+- `libsock` must be built and installed first (it provides the C bridge +
+  `sock_*` PL/I wrappers that `net.pli` calls). Set `-DLIBSOCK_ROOT=<prefix>`
+  when it's not in `/usr/local` or `/opt/libsock`.
 - `pli-llvm` is **optional**: when it is found (via `PATH`,
-  `-DPLI_EXECUTABLE=...`, or `-DPLI_LLVM=...`), `source/net.pli` is
-  compiled and archived into the static lib; when it is absent (typical on
-  Windows) the C bridge and its regression test still build and run. Extra
-   `pli-llvm` flags: `-DLIBNET_PLIFLAGS="..."`. **On Windows**, pli-llvm's linker
+   `-DPLI_EXECUTABLE=...`, or `-DPLI_LLVM=...`), `source/net.pli` is
+   compiled and archived into the static lib; when it is absent (typical on
+   Windows) the `net` target still builds (just without the PL/I module; it
+   links the prebuilt `libsock.a` which contains the C bridge). Extra
+    `pli-llvm` flags: `-DLIBNET_PLIFLAGS="..."`. **On Windows**, pli-llvm's linker
    needs the Windows SDK libraries; `cmake --build` (via MSBuild) sets this up
    automatically, but direct `pli-llvm` invocations require a *Developer Command
    Prompt for VS*.
@@ -156,18 +164,20 @@ cmake --install build --prefix C:\libnet   # lib/net.lib or libnet.a, include/ne
 
 The library is a real linked module: `source/net.pli` is compiled once to
 `net.o` and archived into the static lib (`libnet.a` on Unix, `net.lib` on
-Windows) beside the C bridge. A program pulls in only the **interface**
-(`%include net;`), then links the static lib + `libpli.a` (via pli-llvm's
-`-lnet` on Unix, or the `.lib` path on Windows) in a single `pli-llvm`
-invocation. The `simple_usage` CMake target mirrors this:
+Windows), which links `libsock.a` (the C bridge + `sock_*` wrappers). A
+program pulls in only the **interface** (`%include net;`), then links the
+static lib + `libpli.a` (via pli-llvm's `-lnet` on Unix, or the `.lib` path on
+Windows) in a single `pli-llvm` invocation. The `simple_usage` CMake target
+mirrors this:
 
 ```bash
 cmake --build build --target simple_usage
 ```
 
-`ctest --test-dir build --output-on-failure` runs the `netc_*` bridge regression
-test (passing). `cmake --build build` builds the C bridge, then compiles
-`source/net.pli` when pli-llvm is available.
+`ctest --test-dir build --output-on-failure` runs the test suite (no CTest
+tests are registered after the C bridge was extracted into libsock).
+`cmake --build build` builds the `net` target (compiling `source/net.pli`
+when pli-llvm is available and linking the prebuilt `libsock.a`).
 
 `cmake --build build --target libnet-examples` trial-compiles every example
 (compile-only).
@@ -193,15 +203,16 @@ on condition(net_overflow) begin; ... end;
 
 ## Production readiness
 
-The C bridge and PL/I layer cover the core of what a production socket client or single-client server needs:
+The `net` PL/I layer and its `libsock` dependency cover the core of what a
+production socket client or single-client server needs:
 
-- **socket options** — `net_setopt` (`NETOPT_REUSEADDR` / `KEEPALIVE` / `NODELAY`) and `net_set_linger`; platform values live in `include/type_defs.inc` (macOS arm64; Linux values noted);
+- **socket options** — `net_setopt` (`NETOPT_REUSEADDR` / `KEEPALIVE` / `NODELAY`) and `net_set_linger`; platform values live in `libsock`'s `include/type_defs.inc` (macOS arm64; Linux values noted);
 - **addresses** — `net_peer` (remote) and `net_local` (bound local addr/port);
 - **DNS** — `net_resolve` (host → dotted quad), plus connect-time resolution;
 - **nonblocking connect** — `net_connect_nb` + `net_connect_finish `(`EINPROGRESS` → poll writable → check `SO_ERROR`);
 - **UDP** — `net_sendto` / `net_recvfrom` datagram send/receive;
 - **multi-client servers** — `net_poll_multi` across the server pool, plus `net_server_add_client` / `net_server_client` / `net_server_remove_client` and the `multi_echo_server` example;
-- **errors** — conditions-only model (`net_error` / `net_timeout` / `net_eof` / `net_overflow`), `net_strerror` (full errno text) and `net_errtext`; named errno constants (`errno.inc`).
+- **errors** — conditions-only model (`net_error` / `net_timeout` / `net_eof` / `net_overflow`), `net_strerror` (full errno text) and `net_errtext`; named errno constants (`libsock`'s `errno.inc`).
 
 Still to add for a fully production-grade library (out of current scope):
 
@@ -230,10 +241,10 @@ Note `net_poll` does **not** raise `net_timeout` on a timeout — a poll timeout
 ## Status
 
 The library is a compiled module rather than `%include`d source.  
-`ctest --test-dir build --output-on-failure` runs the `netc_*` bridge regression
-test (passing);
+`ctest --test-dir build --output-on-failure` runs the test suite (no tests are
+registered after the C bridge moved to libsock);
 
-`cmake --build build` builds the C bridge, then compiles `source/net.pli`
-when pli-llvm is available;
+`cmake --build build` builds the `net` target, linking the prebuilt `libsock.a`
+and compiling `source/net.pli` when pli-llvm is available;
 
 `cmake --build build --target libnet-examples` trial-compiles the examples.
